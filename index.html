@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gaza Multi-Vendor Marketplace</title>
+    <link rel="stylesheet" href="style.css?v=3">
+</head>
+
+<body>
+
+    <nav class="glass">
+        <div class="brand" onclick="router.navigate('home')" style="cursor: pointer;">
+            <span style="font-size: 1.5rem; font-weight: bold; color: var(--primary-color);">GazaMarket</span>
+        </div>
+        <div class="nav-links" id="navRight">
+            <!-- Dynamic Links Injected by JS -->
+        </div>
+    </nav>
+
+    <main id="app">
+        <!-- Route Content Injected Here -->
+        <div id="main-content"></div>
+    </main>
+
+    <footer style="text-align: center; padding: 40px; color: #666; font-size: 0.9em;">
+        &copy; 2024 Gaza Global Marketplace. Built with Resilience.
+    </footer>
+
+    <!-- Core Logic -->
+    <script src="app.js?v=3"></script>
+</body>
+
+</html>
