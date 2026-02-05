@@ -75,7 +75,12 @@ const translations = {
         vendorName: "Vendor Name",
         products: "Products",
         actions: "Actions",
-        searchVendors: "Search vendors..."
+        searchVendors: "Search vendors...",
+        status: "Status",
+        all: "All",
+        pending: "Pending",
+        approved: "Approved",
+        searchUsers: "Search users..."
     },
     ar: {
         welcome: "أهلاً بكم في سوق غزة",
@@ -148,7 +153,12 @@ const translations = {
         vendorName: "اسم البائع",
         products: "المنتجات",
         actions: "إجراءات",
-        searchVendors: "بحث عن بائعين..."
+        searchVendors: "بحث عن بائعين...",
+        status: "الحالة",
+        all: "الكل",
+        pending: "قيد الانتظار",
+        approved: "مقابل",
+        searchUsers: "بحث عن مستخدمين..."
     }
 };
 
@@ -566,32 +576,64 @@ function renderVendorShop(params) {
             </div>
         </div>
         <div id="vendorProductGrid" class="grid-products"></div>
+        <div class="flex-between" style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
+            <div id="vsPagination" class="pagination" style="margin-top: 0;"></div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <label style="font-size: 0.9rem;">${t('itemsPerPage')}:</label>
+                <select id="vsItemsPerPage" style="width: auto; padding: 5px 10px;">
+                    <option value="8">8</option><option value="16">16</option><option value="32">32</option>
+                </select>
+            </div>
+        </div>
     `;
 
     const grid = section.querySelector('#vendorProductGrid');
-    const prods = store.getProducts().filter(p => p.vendorId === vendorId);
+    const paginationEl = section.querySelector('#vsPagination');
+    const itemsPerEl = section.querySelector('#vsItemsPerPage');
+    let currentPage = 1;
 
-    prods.forEach(p => {
-        const card = document.createElement('div');
-        card.className = 'glass product-card';
-        const isReal = p.image && (p.image.startsWith('http') || p.image.startsWith('data:image'));
-        card.innerHTML = `
-            ${isReal ? `<img src="${p.image}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 15px; cursor: pointer;" onclick="showImageModal('${p.name}', '${p.image}')">` : `<div class="text-img-placeholder" onclick="showImageModal('${p.name}', '${p.image}')">[${p.name}]</div>`}
-            <h3>${p.name}</h3>
-            <p style="font-size: 0.85rem; color: var(--primary-color); font-weight: 500; margin-bottom: 5px;">
-                ${translations[currentLang][p.category.toLowerCase()] || p.category}
-            </p>
-            <p style="color: #666; font-size: 0.9rem; line-height: 1.4; height: 3.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
-                ${p.description}
-            </p>
-            <div class="flex-between" style="margin-top: auto; padding-top: 15px;">
-                <span style="font-weight: bold; color: var(--primary-color); font-size: 1.1rem;">$${p.price}</span>
-                ${!auth.isVendor() ? `<button class="btn btn-primary" onclick="addToCart('${p.id}')">${t('addToCart')}</button>` : ''}
-            </div>
+    const renderProducts = () => {
+        const itemsPerPage = parseInt(itemsPerEl.value);
+        grid.innerHTML = '';
+        const prods = store.getProducts().filter(p => p.vendorId === vendorId);
+
+        const totalPages = Math.ceil(prods.length / itemsPerPage) || 1;
+        if (currentPage > totalPages) currentPage = totalPages;
+        const paginated = prods.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+        paginated.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'glass product-card';
+            const isReal = p.image && (p.image.startsWith('http') || p.image.startsWith('data:image'));
+            card.innerHTML = `
+                ${isReal ? `<img src="${p.image}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 15px; cursor: pointer;" onclick="showImageModal('${p.name}', '${p.image}')">` : `<div class="text-img-placeholder" onclick="showImageModal('${p.name}', '${p.image}')">[${p.name}]</div>`}
+                <h3>${p.name}</h3>
+                <p style="font-size: 0.85rem; color: var(--primary-color); font-weight: 500; margin-bottom: 5px;">
+                    ${translations[currentLang][p.category.toLowerCase()] || p.category}
+                </p>
+                <p style="color: #666; font-size: 0.9rem; line-height: 1.4; height: 3.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
+                    ${p.description}
+                </p>
+                <div class="flex-between" style="margin-top: auto; padding-top: 15px;">
+                    <span style="font-weight: bold; color: var(--primary-color); font-size: 1.1rem;">$${p.price}</span>
+                    ${!auth.isVendor() ? `<button class="btn btn-primary" onclick="addToCart('${p.id}')">${t('addToCart')}</button>` : ''}
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+
+        paginationEl.innerHTML = `
+            <button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} id="vsPrev">${t('prev')}</button>
+            <span class="page-info">${t('page')} ${currentPage} / ${totalPages}</span>
+            <button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} id="vsNext">${t('next')}</button>
         `;
-        grid.appendChild(card);
-    });
 
+        paginationEl.querySelector('#vsPrev').onclick = () => { if (currentPage > 1) { currentPage--; renderProducts(); window.scrollTo(0, 0); } };
+        paginationEl.querySelector('#vsNext').onclick = () => { if (currentPage < totalPages) { currentPage++; renderProducts(); window.scrollTo(0, 0); } };
+    };
+
+    itemsPerEl.onchange = () => { currentPage = 1; renderProducts(); };
+    setTimeout(renderProducts, 50);
     return section;
 }
 
@@ -657,107 +699,218 @@ function renderRegister() {
 
 function renderAdmin() {
     if (!auth.isAdmin()) return renderHome();
-    const div = document.createElement('div');
-    div.innerHTML = `<h2 class="mb-4">${t('adminDashboard')}</h2><div class="glass" style="padding: 20px;"><h3>${t('vendorApprovals')}</h3><ul id="vList"></ul></div>`;
-    const list = div.querySelector('#vList');
-    store.getUsers().filter(u => u.role === 'vendor').forEach(v => {
-        const li = document.createElement('li');
-        li.style = 'display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 10px 0;';
-        li.innerHTML = `<span>${v.name} (${v.status || 'approved'})</span> ${v.status === 'pending' ? `<button class="btn btn-primary" onclick="approveVendor('${v.id}')">${t('approve')}</button>` : ''}`;
-        list.appendChild(li);
-    });
-    return div;
+    const section = document.createElement('section');
+    section.innerHTML = `
+        <div class="glass" style="padding: 40px; text-align: center; margin-bottom: 30px;">
+            <h1>${t('adminDashboard')}</h1>
+            <p>${t('vendorApprovals')}</p>
+        </div>
+
+        <div class="glass" style="padding: 20px; margin-bottom: 20px;">
+            <div class="search-wrap">
+                <input type="text" id="adminSearch" placeholder="${t('searchUsers')}">
+                <select id="statusFilter" style="width: auto;">
+                    <option value="">${t('all')} ${t('status')}</option>
+                    <option value="pending">${t('pending')}</option>
+                    <option value="approved">${t('approved')}</option>
+                </select>
+                <div style="display: flex; align-items: center; gap: 10px; margin-left: auto;">
+                    <label style="margin-bottom: 0;">${t('itemsPerPage')}:</label>
+                    <select id="adminItemsPer" style="width: auto;">
+                        <option value="5">5</option><option value="10" selected>10</option><option value="20">20</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="data-table-container glass">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>${t('name')}</th>
+                        <th>${t('username')}</th>
+                        <th>${t('status')}</th>
+                        <th style="text-align: center;">${t('actions')}</th>
+                    </tr>
+                </thead>
+                <tbody id="adminTableBody"></tbody>
+            </table>
+        </div>
+
+        <div class="flex-between" style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
+            <div id="adminPagination" class="pagination" style="margin-top: 0;"></div>
+        </div>
+    `;
+
+    const tbody = section.querySelector('#adminTableBody');
+    const searchInput = section.querySelector('#adminSearch');
+    const statusFilter = section.querySelector('#statusFilter');
+    const itemsPerSelect = section.querySelector('#adminItemsPer');
+    const paginationEl = section.querySelector('#adminPagination');
+
+    let currentPage = 1;
+
+    const updateView = () => {
+        const query = searchInput.value.toLowerCase();
+        const status = statusFilter.value;
+        const itemsPerPage = parseInt(itemsPerSelect.value);
+
+        let users = store.getUsers().filter(u => u.role === 'vendor');
+        if (query) users = users.filter(u => u.name.toLowerCase().includes(query) || u.username.toLowerCase().includes(query));
+        if (status) users = users.filter(u => (u.status || 'approved') === status);
+
+        const totalPages = Math.ceil(users.length / itemsPerPage) || 1;
+        if (currentPage > totalPages) currentPage = totalPages;
+
+        const start = (currentPage - 1) * itemsPerPage;
+        const pageData = users.slice(start, start + itemsPerPage);
+
+        tbody.innerHTML = '';
+        if (pageData.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px;">No vendors found.</td></tr>`;
+        } else {
+            pageData.forEach(v => {
+                const tr = document.createElement('tr');
+                const vStatus = v.status || 'approved';
+                tr.innerHTML = `
+                    <td style="font-weight: 600;">${v.name}</td>
+                    <td>@${v.username}</td>
+                    <td><span class="badge" style="background: ${vStatus === 'pending' ? 'var(--danger-color)' : 'var(--primary-color)'}; color: white; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem;">${t(vStatus)}</span></td>
+                    <td style="text-align: center;">
+                        ${vStatus === 'pending' ? `<button class="btn btn-primary" onclick="approveVendor('${v.id}'); router.navigate('admin')">${t('approve')}</button>` : ''}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        paginationEl.innerHTML = `
+            <button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} id="admPrev">${t('prev')}</button>
+            <span class="page-info">${t('page')} ${currentPage} / ${totalPages}</span>
+            <button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} id="admNext">${t('next')}</button>
+        `;
+
+        paginationEl.querySelector('#admPrev').onclick = () => { if (currentPage > 1) { currentPage--; updateView(); } };
+        paginationEl.querySelector('#admNext').onclick = () => { if (currentPage < totalPages) { currentPage++; updateView(); } };
+    };
+
+    searchInput.oninput = () => { currentPage = 1; updateView(); };
+    statusFilter.onchange = () => { currentPage = 1; updateView(); };
+    itemsPerSelect.onchange = () => { currentPage = 1; updateView(); };
+
+    setTimeout(updateView, 50);
+    return section;
 }
 
 function renderVendor() {
     if (!auth.isVendor()) return renderHome();
-    const div = document.createElement('div');
-    div.innerHTML = `
-        <div class="flex-between mb-4"><h2>${t('vendorPortal')}</h2><button class="btn btn-primary" onclick="showProductModal()">+ ${t('newProduct')}</button></div>
+    const section = document.createElement('section');
+    section.innerHTML = `
+        <div class="flex-between mb-4">
+            <h2>${t('vendorPortal')}</h2>
+            <button class="btn btn-primary" onclick="showProductModal()">+ ${t('newProduct')}</button>
+        </div>
+
         <div class="glass" style="padding: 20px; margin-bottom: 20px;">
-            <div class="flex-between" style="gap: 10px;">
-                <input type="text" id="vSearchBar" placeholder="${t('searchPlaceholder')}" style="flex: 2;">
-                <select id="vCatFilter" style="flex: 1;">
+            <div class="search-wrap">
+                <input type="text" id="vpSearch" placeholder="${t('searchPlaceholder')}">
+                <select id="vpCatFilter" style="width: auto;">
                     <option value="">${t('allCategories')}</option>
                     ${[...new Set(store.getProducts().map(p => p.category))].map(c =>
         `<option value="${c}">${translations[currentLang][c.toLowerCase()] || c}</option>`
     ).join('')}
                 </select>
+                <div style="display: flex; align-items: center; gap: 10px; margin-left: auto;">
+                    <label style="margin-bottom: 0;">${t('itemsPerPage')}:</label>
+                    <select id="vpItemsPer" style="width: auto;">
+                        <option value="5">5</option><option value="10" selected>10</option><option value="20">20</option>
+                    </select>
+                </div>
             </div>
         </div>
-        <div class="grid-products" id="vendorProducts"></div>
+
+        <div class="data-table-container glass">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>${t('productName')}</th>
+                        <th>${t('category')}</th>
+                        <th>${t('price')}</th>
+                        <th style="text-align: center;">${t('actions')}</th>
+                    </tr>
+                </thead>
+                <tbody id="vpTableBody"></tbody>
+            </table>
+        </div>
+
         <div class="flex-between" style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
-            <div id="vPagination" class="pagination" style="margin-top: 0;"></div>
-            <select id="vItemsPerPage" style="width: auto; padding: 5px 10px;"><option value="6">6</option><option value="12">12</option></select>
+            <div id="vpPagination" class="pagination" style="margin-top: 0;"></div>
         </div>
     `;
-    const grid = div.querySelector('#vendorProducts');
-    const paginationEl = div.querySelector('#vPagination');
-    const itemsPerEl = div.querySelector('#vItemsPerPage');
+
+    const tbody = section.querySelector('#vpTableBody');
+    const searchInput = section.querySelector('#vpSearch');
+    const catFilter = section.querySelector('#vpCatFilter');
+    const itemsPerSelect = section.querySelector('#vpItemsPer');
+    const paginationEl = section.querySelector('#vpPagination');
+
     let currentPage = 1;
 
-    const renderProducts = () => {
-        const itemsPerPage = parseInt(itemsPerEl.value);
-        grid.innerHTML = '';
-        let myProds = store.getProducts().filter(p => p.vendorId === auth.currentUser.id);
-        const filter = div.querySelector('#vSearchBar').value;
-        const cat = div.querySelector('#vCatFilter').value;
-        if (filter) myProds = myProds.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
-        if (cat) myProds = myProds.filter(p => p.category === cat);
+    const updateView = () => {
+        const query = searchInput.value.toLowerCase();
+        const category = catFilter.value;
+        const itemsPerPage = parseInt(itemsPerSelect.value);
 
-        const totalPages = Math.ceil(myProds.length / itemsPerPage);
-        if (currentPage > totalPages) currentPage = totalPages || 1;
-        const paginated = myProds.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+        let products = store.getProducts().filter(p => p.vendorId === auth.currentUser.id);
+        if (query) products = products.filter(p => p.name.toLowerCase().includes(query));
+        if (category) products = products.filter(p => p.category === category);
 
-        paginated.forEach(p => {
-            const card = document.createElement('div');
-            card.className = 'glass product-card';
-            const isReal = p.image && (p.image.startsWith('http') || p.image.startsWith('data:image'));
-            card.innerHTML = `
-                ${isReal ? `<img src="${p.image}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 10px;">` : `<div style="height: 120px; background: #eee;">[${p.name}]</div>`}
-                <h3>${p.name}</h3>
-                <p style="font-size: 0.85rem; color: var(--primary-color); font-weight: 500; margin-bottom: 5px;">
-                    ${translations[currentLang][p.category.toLowerCase()] || p.category}
-                </p>
-                <p>$${p.price}</p>
-                <div class="flex-between" style="gap: 10px; margin-top: auto;">
-                    <button class="btn btn-secondary" onclick='showProductModal(${JSON.stringify(p).replace(/'/g, "&apos;")})'>${t('edit')}</button>
-                    <button class="btn btn-danger" onclick="deleteProduct('${p.id}')">${t('delete')}</button>
-                </div>
-            `;
-            grid.appendChild(card);
-        });
+        const totalPages = Math.ceil(products.length / itemsPerPage) || 1;
+        if (currentPage > totalPages) currentPage = totalPages;
+
+        const start = (currentPage - 1) * itemsPerPage;
+        const pageData = products.slice(start, start + itemsPerPage);
+
+        tbody.innerHTML = '';
+        if (pageData.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px;">No products found.</td></tr>`;
+        } else {
+            pageData.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            ${p.image ? `<img src="${p.image}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;">` : '📦'}
+                            <span>${p.name}</span>
+                        </div>
+                    </td>
+                    <td><span class="badge" style="background: rgba(42, 157, 143, 0.1); color: var(--primary-color);">${translations[currentLang][p.category.toLowerCase()] || p.category}</span></td>
+                    <td><strong>$${p.price}</strong></td>
+                    <td style="text-align: center;">
+                        <button class="btn btn-secondary" style="padding: 5px 10px;" onclick='showProductModal(${JSON.stringify(p).replace(/'/g, "&apos;")})'>${t('edit')}</button>
+                        <button class="btn btn-danger" style="padding: 5px 10px;" onclick="deleteProduct('${p.id}')">${t('delete')}</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
         paginationEl.innerHTML = `
-            <button class="page-btn" id="vPrev" ${currentPage === 1 ? 'disabled' : ''}>${t('prev')}</button>
-            <div style="display: flex; align-items: center; gap: 5px;">
-                <span class="page-info">${t('page')}</span>
-                <input type="number" id="vJumpPage" value="${currentPage}" min="1" max="${totalPages || 1}" style="width: 50px; text-align: center; padding: 2px;">
-                <span class="page-info">/ ${totalPages || 1}</span>
-            </div>
-            <button class="page-btn" id="vNext" ${currentPage === totalPages || totalPages === 0 ? 'disabled' : ''}>${t('next')}</button>
+            <button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} id="vpPrev">${t('prev')}</button>
+            <span class="page-info">${t('page')} ${currentPage} / ${totalPages}</span>
+            <button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} id="vpNext">${t('next')}</button>
         `;
-        paginationEl.querySelector('#vPrev').onclick = () => { if (currentPage > 1) { currentPage--; renderProducts(); } };
-        paginationEl.querySelector('#vNext').onclick = () => { if (currentPage < totalPages) { currentPage++; renderProducts(); } };
 
-        const jumpInput = paginationEl.querySelector('#vJumpPage');
-        jumpInput.onchange = (e) => {
-            let val = parseInt(e.target.value);
-            if (val >= 1 && val <= totalPages) {
-                currentPage = val;
-                renderProducts();
-            } else {
-                e.target.value = currentPage;
-            }
-        };
-        jumpInput.onkeydown = (e) => {
-            if (e.key === 'Enter') jumpInput.onchange(e);
-        };
+        paginationEl.querySelector('#vpPrev').onclick = () => { if (currentPage > 1) { currentPage--; updateView(); } };
+        paginationEl.querySelector('#vpNext').onclick = () => { if (currentPage < totalPages) { currentPage++; updateView(); } };
     };
-    div.querySelector('#vSearchBar').oninput = () => { currentPage = 1; renderProducts(); };
-    div.querySelector('#vCatFilter').onchange = () => { currentPage = 1; renderProducts(); };
-    itemsPerEl.onchange = () => { currentPage = 1; renderProducts(); };
-    setTimeout(renderProducts, 50);
-    return div;
+
+    searchInput.oninput = () => { currentPage = 1; updateView(); };
+    catFilter.onchange = () => { currentPage = 1; updateView(); };
+    itemsPerSelect.onchange = () => { currentPage = 1; updateView(); };
+
+    setTimeout(updateView, 50);
+    return section;
 }
 
 function renderCart() {
