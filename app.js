@@ -66,7 +66,12 @@ const translations = {
         registerSuccess: "Registration successful! You can now login.",
         registerVendor: "Register as Vendor",
         registerClient: "Register as Client",
-        role: "Role"
+        role: "Role",
+        vendors: "Vendors",
+        browseVendors: "Browse Vendors",
+        viewShop: "View Shop",
+        backToVendors: "Back to Vendors",
+        allProductsBy: "All products by"
     },
     ar: {
         welcome: "أهلاً بكم في سوق غزة",
@@ -130,7 +135,12 @@ const translations = {
         registerSuccess: "تم التسجيل بنجاح! يمكنك الآن تسجيل الدخول.",
         registerVendor: "سجل كبائع",
         registerClient: "سجل كعميل",
-        role: "الدور"
+        role: "الدور",
+        vendors: "البائعين",
+        browseVendors: "تصفح البائعين",
+        viewShop: "عرض المتجر",
+        backToVendors: "العودة للقائمة",
+        allProductsBy: "جميع منتجات"
     }
 };
 
@@ -321,6 +331,7 @@ class Router {
             app.appendChild(view);
         }
         updateNav();
+        window.scrollTo(0, 0);
     }
 }
 
@@ -379,12 +390,16 @@ function renderHome() {
             const card = document.createElement('div');
             card.className = 'glass product-card';
             const isReal = p.image && (p.image.startsWith('http') || p.image.startsWith('data:image'));
+            const vendor = store.getUsers().find(u => u.id === p.vendorId);
             card.innerHTML = `
                 ${isReal ? `<img src="${p.image}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 15px; cursor: pointer;" onclick="showImageModal('${p.name}', '${p.image}')">` : `<div class="text-img-placeholder" onclick="showImageModal('${p.name}', '${p.image}')">[${p.name}]</div>`}
                 <h3>${p.name}</h3>
-                <p style="font-size: 0.85rem; color: var(--primary-color); font-weight: 500; margin-bottom: 5px;">
-                    ${translations[currentLang][p.category.toLowerCase()] || p.category}
-                </p>
+                <div class="flex-between" style="margin-bottom: 5px;">
+                    <p style="font-size: 0.85rem; color: var(--primary-color); font-weight: 500;">
+                        ${translations[currentLang][p.category.toLowerCase()] || p.category}
+                    </p>
+                    ${vendor ? `<a href="#" style="font-size: 0.8rem; color: #888; text-decoration: none;" onclick="event.preventDefault(); router.navigate('vendorShop', {id: '${vendor.id}'})">👤 ${vendor.name}</a>` : ''}
+                </div>
                 <p style="color: #666; font-size: 0.9rem; line-height: 1.4; height: 3.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
                     ${p.description}
                 </p>
@@ -427,6 +442,83 @@ function renderHome() {
     section.querySelector('#catFilter').onchange = () => { currentPage = 1; renderProducts(); };
     itemsPerEl.onchange = () => { currentPage = 1; renderProducts(); };
     setTimeout(renderProducts, 50);
+    return section;
+}
+
+function renderVendors() {
+    const section = document.createElement('section');
+    section.innerHTML = `
+        <div class="glass" style="padding: 40px; text-align: center; margin-bottom: 30px;">
+            <h1>${t('vendors')}</h1>
+            <p>${t('browseVendors')}</p>
+        </div>
+        <div id="vendorGrid" class="grid-products"></div>
+    `;
+    const grid = section.querySelector('#vendorGrid');
+    const vendors = store.getUsers().filter(u => u.role === 'vendor' && u.status === 'approved');
+
+    vendors.forEach(v => {
+        const card = document.createElement('div');
+        card.className = 'glass product-card';
+        card.style.textAlign = 'center';
+
+        // Count products for this vendor
+        const pCount = store.getProducts().filter(p => p.vendorId === v.id).length;
+
+        card.innerHTML = `
+            <div style="font-size: 4rem; margin-bottom: 15px;">🏪</div>
+            <h3>${v.name}</h3>
+            <p style="margin-bottom: 15px; color: #666;">${pCount} Products</p>
+            <button class="btn btn-primary" onclick="router.navigate('vendorShop', {id: '${v.id}'})">${t('viewShop')}</button>
+        `;
+        grid.appendChild(card);
+    });
+
+    return section;
+}
+
+function renderVendorShop(params) {
+    const vendorId = params.id;
+    const vendor = store.getUsers().find(u => u.id === vendorId);
+    if (!vendor) return renderHome();
+
+    const section = document.createElement('section');
+    section.innerHTML = `
+        <div class="glass" style="padding: 40px; margin-bottom: 30px; display: flex; align-items: center; gap: 30px;">
+            <div style="font-size: 5rem;">🏪</div>
+            <div>
+                <h1>${vendor.name}</h1>
+                <p>${t('allProductsBy')} ${vendor.name}</p>
+                <button class="btn btn-secondary mt-4" onclick="router.navigate('vendors')">← ${t('backToVendors')}</button>
+            </div>
+        </div>
+        <div id="vendorProductGrid" class="grid-products"></div>
+    `;
+
+    const grid = section.querySelector('#vendorProductGrid');
+    const prods = store.getProducts().filter(p => p.vendorId === vendorId);
+
+    prods.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'glass product-card';
+        const isReal = p.image && (p.image.startsWith('http') || p.image.startsWith('data:image'));
+        card.innerHTML = `
+            ${isReal ? `<img src="${p.image}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 15px; cursor: pointer;" onclick="showImageModal('${p.name}', '${p.image}')">` : `<div class="text-img-placeholder" onclick="showImageModal('${p.name}', '${p.image}')">[${p.name}]</div>`}
+            <h3>${p.name}</h3>
+            <p style="font-size: 0.85rem; color: var(--primary-color); font-weight: 500; margin-bottom: 5px;">
+                ${translations[currentLang][p.category.toLowerCase()] || p.category}
+            </p>
+            <p style="color: #666; font-size: 0.9rem; line-height: 1.4; height: 3.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
+                ${p.description}
+            </p>
+            <div class="flex-between" style="margin-top: auto; padding-top: 15px;">
+                <span style="font-weight: bold; color: var(--primary-color); font-size: 1.1rem;">$${p.price}</span>
+                ${!auth.isVendor() ? `<button class="btn btn-primary" onclick="addToCart('${p.id}')">${t('addToCart')}</button>` : ''}
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+
     return section;
 }
 
@@ -700,6 +792,8 @@ function updateNav() {
     theme.onclick = (e) => { e.preventDefault(); setTheme(currentTheme === 'light' ? 'dark' : 'light'); };
     nav.appendChild(theme);
 
+    nav.appendChild(create(t('vendors'), () => router.navigate('vendors')));
+
     if (auth.currentUser) {
         if (auth.isAdmin()) nav.appendChild(create('Admin', () => router.navigate('admin')));
         if (auth.isVendor()) nav.appendChild(create(t('vendorPortal'), () => router.navigate('vendor')));
@@ -717,6 +811,8 @@ router.register('register', renderRegister);
 router.register('admin', renderAdmin);
 router.register('vendor', renderVendor);
 router.register('cart', renderCart);
+router.register('vendors', renderVendors);
+router.register('vendorShop', renderVendorShop);
 
 document.addEventListener('DOMContentLoaded', async () => {
     await store.init();
