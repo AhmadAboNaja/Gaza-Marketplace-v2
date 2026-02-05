@@ -73,9 +73,9 @@ const translations = {
         backToVendors: "Back to Vendors",
         allProductsBy: "All products by",
         vendorName: "Vendor Name",
-        productsCount: "Products",
+        products: "Products",
         actions: "Actions",
-        searchVendors: "Search vendors by name..."
+        searchVendors: "Search vendors..."
     },
     ar: {
         welcome: "أهلاً بكم في سوق غزة",
@@ -146,9 +146,9 @@ const translations = {
         backToVendors: "العودة للقائمة",
         allProductsBy: "جميع منتجات",
         vendorName: "اسم البائع",
-        productsCount: "المنتجات",
+        products: "المنتجات",
         actions: "إجراءات",
-        searchVendors: "بحث عن بائع بالاسم..."
+        searchVendors: "بحث عن بائعين..."
     }
 };
 
@@ -460,28 +460,93 @@ function renderVendors() {
             <h1>${t('vendors')}</h1>
             <p>${t('browseVendors')}</p>
         </div>
-        <div id="vendorGrid" class="grid-products"></div>
+        
+        <div class="glass" style="padding: 20px; margin-bottom: 20px;">
+            <div class="search-wrap">
+                <input type="text" id="vendorSearch" placeholder="${t('searchVendors')}">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label style="margin-bottom: 0;">${t('itemsPerPage')}:</label>
+                    <select id="vItemsPerPage" style="width: auto;">
+                        <option value="5">5</option><option value="10" selected>10</option><option value="20">20</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="data-table-container glass">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>${t('vendorName')}</th>
+                        <th>${t('products')}</th>
+                        <th style="text-align: center;">${t('actions')}</th>
+                    </tr>
+                </thead>
+                <tbody id="vendorTableBody"></tbody>
+            </table>
+        </div>
+
+        <div class="flex-between" style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
+            <div id="vPagination" class="pagination" style="margin-top: 0;"></div>
+        </div>
     `;
-    const grid = section.querySelector('#vendorGrid');
-    const vendors = store.getUsers().filter(u => u.role === 'vendor' && u.status === 'approved');
 
-    vendors.forEach(v => {
-        const card = document.createElement('div');
-        card.className = 'glass product-card';
-        card.style.textAlign = 'center';
+    const tbody = section.querySelector('#vendorTableBody');
+    const searchInput = section.querySelector('#vendorSearch');
+    const itemsPerSelect = section.querySelector('#vItemsPerPage');
+    const paginationEl = section.querySelector('#vPagination');
 
-        // Count products for this vendor
-        const pCount = store.getProducts().filter(p => p.vendorId === v.id).length;
+    let currentPage = 1;
+    let filteredVendors = [];
 
-        card.innerHTML = `
-            <div style="font-size: 4rem; margin-bottom: 15px;">🏪</div>
-            <h3>${v.name}</h3>
-            <p style="margin-bottom: 15px; color: #666;">${pCount} Products</p>
-            <button class="btn btn-primary" onclick="router.navigate('vendorShop', {id: '${v.id}'})">${t('viewShop')}</button>
+    const updateView = () => {
+        const query = searchInput.value.toLowerCase();
+        const itemsPerPage = parseInt(itemsPerSelect.value);
+
+        const allVendors = store.getUsers().filter(u => u.role === 'vendor' && u.status === 'approved');
+        filteredVendors = allVendors.filter(v => v.name.toLowerCase().includes(query));
+
+        const totalPages = Math.ceil(filteredVendors.length / itemsPerPage) || 1;
+        if (currentPage > totalPages) currentPage = totalPages;
+
+        const start = (currentPage - 1) * itemsPerPage;
+        const pageData = filteredVendors.slice(start, start + itemsPerPage);
+
+        tbody.innerHTML = '';
+        if (pageData.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; padding: 40px;">No vendors found.</td></tr>`;
+        } else {
+            pageData.forEach(v => {
+                const pCount = store.getProducts().filter(p => p.vendorId === v.id).length;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight: 600;">
+                        <span style="font-size: 1.2rem; margin-right: 10px;">🏪</span>
+                        ${v.name}
+                    </td>
+                    <td><span class="badge" style="background: var(--primary-color); color: white; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem;">${pCount} ${t('products')}</span></td>
+                    <td style="text-align: center;">
+                        <button class="btn btn-primary" onclick="router.navigate('vendorShop', {id: '${v.id}'})">${t('viewShop')}</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        paginationEl.innerHTML = `
+            <button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} id="vPrev">${t('prev')}</button>
+            <span class="page-info">${t('page')} ${currentPage} / ${totalPages}</span>
+            <button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} id="vNext">${t('next')}</button>
         `;
-        grid.appendChild(card);
-    });
 
+        paginationEl.querySelector('#vPrev').onclick = () => { if (currentPage > 1) { currentPage--; updateView(); } };
+        paginationEl.querySelector('#vNext').onclick = () => { if (currentPage < totalPages) { currentPage++; updateView(); } };
+    };
+
+    searchInput.oninput = () => { currentPage = 1; updateView(); };
+    itemsPerSelect.onchange = () => { currentPage = 1; updateView(); };
+
+    setTimeout(updateView, 50);
     return section;
 }
 
