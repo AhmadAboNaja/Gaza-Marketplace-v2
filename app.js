@@ -248,21 +248,20 @@ class DataStore {
         }
     }
 
-    async syncWithCloud() {
+    async syncWithCloud(silent = false) {
         try {
-            console.log("Syncing with Google Sheets...");
             const response = await fetch(`${GOOGLE_SHEETS_URL}?action=getAll`);
             const cloudData = await response.json();
             if (cloudData && cloudData.users) {
                 this.data = cloudData;
                 this.save();
-                console.log("Cloud sync complete.");
-                // Refresh UI if needed
-                if (router.currentRoute) router.navigate(router.currentRoute);
+                if (!silent && router.currentRoute) router.navigate(router.currentRoute);
+                return true;
             }
         } catch (e) {
             console.warn("Cloud sync failed. Working offline.", e);
         }
+        return false;
     }
 
     async pushToCloud(tab, action, data) {
@@ -1263,9 +1262,13 @@ function renderChat(params) {
 
     setTimeout(refreshMessages, 50);
     // Poll for new messages every 3 seconds (simulated real-time)
-    const interval = setInterval(() => {
-        if (router.currentRoute === 'chat') refreshMessages();
-        else clearInterval(interval);
+    const interval = setInterval(async () => {
+        if (router.currentRoute === 'chat') {
+            const hasNew = await store.syncWithCloud(true);
+            if (hasNew) refreshMessages();
+        } else {
+            clearInterval(interval);
+        }
     }, 3000);
 
     return section;
