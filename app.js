@@ -1248,6 +1248,7 @@ function renderChat(params) {
         `).join('');
         display.scrollTop = display.scrollHeight;
     };
+    window.refreshMessages = refreshMessages; // Exposed for global worker
 
     form.onsubmit = (e) => {
         e.preventDefault();
@@ -1264,16 +1265,6 @@ function renderChat(params) {
     };
 
     setTimeout(refreshMessages, 50);
-    // Poll for new messages every 3 seconds (simulated real-time)
-    const interval = setInterval(async () => {
-        if (router.currentRoute === 'chat') {
-            const hasNew = await store.syncWithCloud(true);
-            if (hasNew) refreshMessages();
-        } else {
-            clearInterval(interval);
-        }
-    }, 3000);
-
     return section;
 }
 
@@ -1415,4 +1406,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.setAttribute('data-theme', currentTheme);
     router.navigate('home');
+
+    // --- Global Background Watcher ---
+    // This runs forever to provide "Real-Time" notifications and chat
+    setInterval(async () => {
+        if (!auth.currentUser) return; // Only sync if logged in
+
+        const isChatting = router.currentRoute === 'chat';
+        const pollRate = isChatting ? 3000 : 15000; // 3s if chatting, 15s otherwise
+
+        // We only trigger the poll if the time since last poll > pollRate
+        const now = Date.now();
+        if (!window._lastPoll || (now - window._lastPoll) >= pollRate) {
+            window._lastPoll = now;
+            const hasNew = await store.syncWithCloud(true);
+
+            if (hasNew) {
+                // If we are currently in a chat window, refresh the bubbles
+                if (isChatting && typeof window.refreshMessages === 'function') {
+                    window.refreshMessages();
+                } else {
+                    // Otherwise just update the Navigation badges
+                    updateNav();
+                }
+            }
+        }
+    }, 1000); // Check the "Should I poll?" logic every second
 });
