@@ -220,7 +220,7 @@ function setTheme(theme) {
 }
 
 /* --- Data & Persistence --- */
-const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwYRgT3Z2ma23UBlOHfHkt1z6v-e5_xbEnr975zqrwaIJswhjV2NjVcWx1Htv4hphgS/exec"; // PASTE YOUR GOOGLE APPS SCRIPT URL HERE
+const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwbl2yeKaaaO7OuA3CIfJqjN2722ClC2mb69w9Uxo_7Ked_1A2B32ZQD7140ogKqb6V/exec"; // PASTE YOUR GOOGLE APPS SCRIPT URL HERE
 
 class DataStore {
     constructor() {
