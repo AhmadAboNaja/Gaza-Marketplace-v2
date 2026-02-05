@@ -670,15 +670,15 @@ function renderHome() {
             <button class="page-btn" id="nextPage" ${currentPage === totalPages || totalPages === 0 ? 'disabled' : ''}>${t('next')}</button>
         `;
 
-        paginationEl.querySelector('#prevPage').onclick = () => { if (currentPage > 1) { currentPage--; renderProducts(); window.scrollTo(0, 0); } };
-        paginationEl.querySelector('#nextPage').onclick = () => { if (currentPage < totalPages) { currentPage++; renderProducts(); window.scrollTo(0, 0); } };
+        paginationEl.querySelector('#prevPage').onclick = () => { if (currentPage > 1) { currentPage--; render(); window.scrollTo(0, 0); } };
+        paginationEl.querySelector('#nextPage').onclick = () => { if (currentPage < totalPages) { currentPage++; render(); window.scrollTo(0, 0); } };
 
         const jumpInput = paginationEl.querySelector('#jumpPage');
         jumpInput.onchange = (e) => {
             let val = parseInt(e.target.value);
             if (val >= 1 && val <= totalPages) {
                 currentPage = val;
-                renderProducts();
+                render();
                 window.scrollTo(0, 0);
             } else {
                 e.target.value = currentPage;
@@ -688,10 +688,12 @@ function renderHome() {
             if (e.key === 'Enter') jumpInput.onchange(e);
         };
     };
-    section.querySelector('#searchBar').oninput = () => { currentPage = 1; renderProducts(); };
-    section.querySelector('#catFilter').onchange = () => { currentPage = 1; renderProducts(); };
-    itemsPerEl.onchange = () => { currentPage = 1; renderProducts(); };
-    setTimeout(renderProducts, 50);
+    searchInput.oninput = () => { currentPage = 1; render(); };
+    catFilter.onchange = () => { currentPage = 1; render(); };
+    sortBySelect.onchange = () => { currentPage = 1; render(); };
+    minPriceInput.oninput = () => { currentPage = 1; render(); };
+    maxPriceInput.oninput = () => { currentPage = 1; render(); };
+    setTimeout(render, 50);
     return section;
 }
 
