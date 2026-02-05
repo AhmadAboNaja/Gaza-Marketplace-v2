@@ -96,7 +96,22 @@ const translations = {
         send: "Send",
         typeMessage: "Type a message...",
         noMessages: "No messages yet. Start a conversation!",
-        selectChat: "Select a conversation to start chatting"
+        selectChat: "Select a conversation to start chatting",
+        stock: "Stock",
+        soldOut: "Sold Out",
+        outOfStock: "Out of Stock",
+        rating: "Rating",
+        reviews: "Reviews",
+        writeReview: "Write a Review",
+        orderStatus: "Order Status",
+        processing: "Processing",
+        shipped: "Shipped",
+        delivered: "Delivered",
+        cancelled: "Cancelled",
+        pending: "Pending",
+        updateStatus: "Update Status",
+        customer: "Customer",
+        items: "Items"
     },
     ar: {
         welcome: "أهلاً بكم في سوق غزة",
@@ -190,7 +205,22 @@ const translations = {
         send: "إرسال",
         typeMessage: "اكتب رسالة...",
         noMessages: "لا توجد رسائل بعد. ابدأ محادثة!",
-        selectChat: "اختر محادثة لبدء الدردشة"
+        selectChat: "اختر محادثة لبدء الدردشة",
+        stock: "المخزون",
+        soldOut: "نفد الكمية",
+        outOfStock: "غير متوفر",
+        rating: "التقييم",
+        reviews: "المراجعات",
+        writeReview: "اكتب مراجعة",
+        orderStatus: "حالة الطلب",
+        processing: "قيد المعالجة",
+        shipped: "تم الشحن",
+        delivered: "تم التوصيل",
+        cancelled: "ملغي",
+        pending: "قيد الانتظار",
+        updateStatus: "تحديث الحالة",
+        customer: "الزبون",
+        items: "العناصر"
     }
 };
 
@@ -224,7 +254,7 @@ const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwbl2yeKaaaO7
 
 class DataStore {
     constructor() {
-        this.data = { users: [], products: [], orders: [], messages: [] };
+        this.data = { users: [], products: [], orders: [], messages: [], reviews: [] };
         // Initial setup
         this.init();
     }
@@ -291,6 +321,7 @@ class DataStore {
     getProducts() { return this.data.products; }
     getMessages() { return this.data.messages || []; }
     getOrders() { return this.data.orders || []; }
+    getReviews() { return this.data.reviews || []; }
 
     addUser(user) {
         this.data.users.push(user);
@@ -334,6 +365,24 @@ class DataStore {
         this.data.orders.push(order);
         this.save();
         this.pushToCloud('orders', 'add', order);
+    }
+
+    updateOrder(updated) {
+        const idx = this.data.orders.findIndex(o => o.id === updated.id);
+        if (idx !== -1) {
+            this.data.orders[idx] = updated;
+            this.save();
+            this.pushToCloud('orders', 'update', updated);
+        }
+    }
+
+    addReview(review) {
+        if (!this.data.reviews) this.data.reviews = [];
+        const rev = { id: 'r' + Date.now(), timestamp: new Date().toISOString(), ...review };
+        this.data.reviews.push(rev);
+        this.save();
+        this.pushToCloud('reviews', 'add', rev);
+        return rev;
     }
 
     addMessage(msg) {
@@ -491,8 +540,11 @@ function renderHome() {
             card.className = 'glass product-card';
             const isReal = p.image && (p.image.startsWith('http') || p.image.startsWith('data:image'));
             const vendor = store.getUsers().find(u => u.id === p.vendorId);
+            const { avg, count } = getProductRating(p.id);
+            const isSoldOut = p.stock <= 0;
+
             card.innerHTML = `
-                ${isReal ? `<img src="${p.image}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 15px; cursor: pointer;" onclick="showImageModal('${p.name}', '${p.image}')">` : `<div class="text-img-placeholder" onclick="showImageModal('${p.name}', '${p.image}')">[${p.name}]</div>`}
+                ${isReal ? `<img src="${p.image}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 15px; cursor: pointer; ${isSoldOut ? 'filter: grayscale(1);' : ''}" onclick="showImageModal('${p.name}', '${p.image}')">` : `<div class="text-img-placeholder" onclick="showImageModal('${p.name}', '${p.image}')">[${p.name}]</div>`}
                 <h3>${p.name}</h3>
                 <div class="flex-between" style="margin-bottom: 5px;">
                     <p style="font-size: 0.85rem; color: var(--primary-color); font-weight: 500;">
@@ -500,12 +552,20 @@ function renderHome() {
                     </p>
                     ${vendor ? `<a href="#" style="font-size: 0.8rem; color: #888; text-decoration: none;" onclick="event.preventDefault(); router.navigate('vendorShop', {id: '${vendor.id}'})">👤 ${vendor.name}</a>` : ''}
                 </div>
+                <div style="margin-bottom: 10px; font-size: 0.8rem; display: flex; align-items: center; gap: 5px;">
+                    ${renderStars(avg)} <span style="opacity: 0.6;">(${count})</span>
+                </div>
                 <p style="color: #666; font-size: 0.9rem; line-height: 1.4; height: 3.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
                     ${p.description}
                 </p>
+                <div class="flex-between" style="margin-top: 10px; font-size: 0.85rem;">
+                    <span style="color: ${isSoldOut ? 'var(--danger-color)' : '#2a9d8f'}; font-weight: bold;">
+                        ${isSoldOut ? t('soldOut') : `${t('stock')}: ${p.stock}`}
+                    </span>
+                </div>
                 <div class="flex-between" style="margin-top: auto; padding-top: 15px;">
                     <span style="font-weight: bold; color: var(--primary-color); font-size: 1.1rem;">$${p.price}</span>
-                    ${!auth.isVendor() ? `<button class="btn btn-primary" onclick="addToCart('${p.id}')">${t('addToCart')}</button>` : ''}
+                    ${!auth.isVendor() ? `<button class="btn ${isSoldOut ? 'btn-secondary' : 'btn-primary'}" onclick="addToCart('${p.id}')" ${isSoldOut ? 'disabled' : ''}>${isSoldOut ? t('soldOut') : t('addToCart')}</button>` : ''}
                 </div>
             `;
             grid.appendChild(card);
@@ -716,18 +776,31 @@ function renderVendorShop(params) {
                 const card = document.createElement('div');
                 card.className = 'glass product-card';
                 const isReal = p.image && (p.image.startsWith('http') || p.image.startsWith('data:image'));
+                const { avg, count } = getProductRating(p.id);
+                const isSoldOut = p.stock <= 0;
+
                 card.innerHTML = `
-                    ${isReal ? `<img src="${p.image}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 15px; cursor: pointer;" onclick="showImageModal('${p.name}', '${p.image}')">` : `<div class="text-img-placeholder" onclick="showImageModal('${p.name}', '${p.image}')">[${p.name}]</div>`}
+                    ${isReal ? `<img src="${p.image}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 15px; cursor: pointer; ${isSoldOut ? 'filter: grayscale(1);' : ''}" onclick="showImageModal('${p.name}', '${p.image}')">` : `<div class="text-img-placeholder" onclick="showImageModal('${p.name}', '${p.image}')">[${p.name}]</div>`}
                     <h3>${p.name}</h3>
-                    <p style="font-size: 0.85rem; color: var(--primary-color); font-weight: 500; margin-bottom: 5px;">
-                        ${translations[currentLang][p.category.toLowerCase()] || p.category}
-                    </p>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                      <p style="font-size: 0.85rem; color: var(--primary-color); font-weight: 500;">
+                          ${translations[currentLang][p.category.toLowerCase()] || p.category}
+                      </p>
+                      <div style="font-size: 0.8rem;">
+                        ${renderStars(avg)} (${count})
+                      </div>
+                    </div>
                     <p style="color: #666; font-size: 0.9rem; line-height: 1.4; height: 3.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
                         ${p.description}
                     </p>
+                    <div class="flex-between" style="margin-top: 10px; font-size: 0.85rem;">
+                        <span style="color: ${isSoldOut ? 'var(--danger-color)' : '#2a9d8f'}; font-weight: bold;">
+                            ${isSoldOut ? t('soldOut') : `${t('stock')}: ${p.stock}`}
+                        </span>
+                    </div>
                     <div class="flex-between" style="margin-top: auto; padding-top: 15px;">
                         <span style="font-weight: bold; color: var(--primary-color); font-size: 1.1rem;">$${p.price}</span>
-                        ${!auth.isVendor() ? `<button class="btn btn-primary" onclick="addToCart('${p.id}')">${t('addToCart')}</button>` : ''}
+                        ${!auth.isVendor() ? `<button class="btn ${isSoldOut ? 'btn-secondary' : 'btn-primary'}" onclick="addToCart('${p.id}')" ${isSoldOut ? 'disabled' : ''}>${isSoldOut ? t('soldOut') : t('addToCart')}</button>` : ''}
                     </div>
                 `;
                 grid.appendChild(card);
@@ -941,70 +1014,113 @@ function renderVendor() {
             </div>
         </div>
 
-        <div class="glass" style="padding: 20px; margin-bottom: 20px;">
-            <div class="search-wrap">
-                <input type="text" id="vpSearch" placeholder="${t('searchPlaceholder')}">
-                <select id="vpCatFilter" style="width: auto;">
-                    <option value="">${t('allCategories')}</option>
-                    ${[...new Set(store.getProducts().map(p => p.category))].map(c =>
+        <div class="glass" style="margin-bottom: 20px; display: flex; gap: 10px; padding: 10px;">
+            <button class="btn btn-secondary v-tab active" data-tab="products">${t('products')}</button>
+            <button class="btn btn-secondary v-tab" data-tab="orders">${t('orders')}</button>
+        </div>
+
+        <div id="vProductsView">
+            <div class="glass" style="padding: 20px; margin-bottom: 20px;">
+                <div class="search-wrap">
+                    <input type="text" id="vpSearch" placeholder="${t('searchPlaceholder')}">
+                    <select id="vpCatFilter" style="width: auto;">
+                        <option value="">${t('allCategories')}</option>
+                        ${[...new Set(store.getProducts().map(p => p.category))].map(c =>
         `<option value="${c}">${translations[currentLang][c.toLowerCase()] || c}</option>`
     ).join('')}
-                </select>
-                <div style="display: flex; align-items: center; gap: 10px; margin-left: auto;">
-                    <label style="margin-bottom: 0;">${t('itemsPerPage')}:</label>
-                    <select id="vpItemsPer" style="width: auto;">
-                        <option value="5">5</option><option value="10" selected>10</option><option value="20">20</option>
                     </select>
                 </div>
             </div>
+
+            <div class="data-table-container glass">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>${t('productName')}</th>
+                            <th>${t('category')}</th>
+                            <th>${t('price')}</th>
+                            <th>${t('stock')}</th>
+                            <th style="text-align: center;">${t('actions')}</th>
+                        </tr>
+                    </thead>
+                    <tbody id="vpTableBody"></tbody>
+                </table>
+            </div>
         </div>
 
-        <div class="data-table-container glass">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>${t('productName')}</th>
-                        <th>${t('category')}</th>
-                        <th>${t('price')}</th>
-                        <th style="text-align: center;">${t('actions')}</th>
-                    </tr>
-                </thead>
-                <tbody id="vpTableBody"></tbody>
-            </table>
+        <div id="vOrdersView" style="display: none;">
+            <div class="data-table-container glass">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>${t('customer')}</th>
+                            <th>${t('total')}</th>
+                            <th>${t('orderStatus')}</th>
+                            <th style="text-align: center;">${t('actions')}</th>
+                        </tr>
+                    </thead>
+                    <tbody id="voTableBody"></tbody>
+                </table>
+            </div>
         </div>
 
         <div class="flex-between" style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
             <div id="vpPagination" class="pagination" style="margin-top: 0;"></div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <label style="margin-bottom: 0;">${t('itemsPerPage')}:</label>
+                <select id="vpItemsPer" style="width: auto;">
+                    <option value="5">5</option><option value="10" selected>10</option><option value="20">20</option>
+                </select>
+            </div>
         </div>
     `;
 
-    const tbody = section.querySelector('#vpTableBody');
+    const vProductsView = section.querySelector('#vProductsView');
+    const vOrdersView = section.querySelector('#vOrdersView');
+    const vpTableBody = section.querySelector('#vpTableBody');
+    const voTableBody = section.querySelector('#voTableBody');
     const searchInput = section.querySelector('#vpSearch');
     const catFilter = section.querySelector('#vpCatFilter');
     const itemsPerSelect = section.querySelector('#vpItemsPer');
     const paginationEl = section.querySelector('#vpPagination');
 
+    let currentTab = 'products';
     let currentPage = 1;
+
+    section.querySelectorAll('.v-tab').forEach(btn => {
+        btn.onclick = () => {
+            section.querySelectorAll('.v-tab').forEach(b => {
+                b.classList.remove('btn-primary');
+                b.classList.add('btn-secondary');
+            });
+            btn.classList.remove('btn-secondary');
+            btn.classList.add('btn-primary');
+            currentTab = btn.dataset.tab;
+            vProductsView.style.display = currentTab === 'products' ? 'block' : 'none';
+            vOrdersView.style.display = currentTab === 'orders' ? 'block' : 'none';
+            currentPage = 1;
+            updateView();
+        };
+    });
 
     const updateView = () => {
         const query = searchInput.value.toLowerCase();
         const category = catFilter.value;
         const itemsPerPage = parseInt(itemsPerSelect.value);
 
-        let products = store.getProducts().filter(p => p.vendorId === auth.currentUser.id);
-        if (query) products = products.filter(p => p.name.toLowerCase().includes(query));
-        if (category) products = products.filter(p => p.category === category);
+        if (currentTab === 'products') {
+            let products = store.getProducts().filter(p => p.vendorId === auth.currentUser.id);
+            if (query) products = products.filter(p => p.name.toLowerCase().includes(query));
+            if (category) products = products.filter(p => p.category === category);
 
-        const totalPages = Math.ceil(products.length / itemsPerPage) || 1;
-        if (currentPage > totalPages) currentPage = totalPages;
+            const totalPages = Math.ceil(products.length / itemsPerPage) || 1;
+            if (currentPage > totalPages) currentPage = totalPages;
 
-        const start = (currentPage - 1) * itemsPerPage;
-        const pageData = products.slice(start, start + itemsPerPage);
+            const start = (currentPage - 1) * itemsPerPage;
+            const pageData = products.slice(start, start + itemsPerPage);
 
-        tbody.innerHTML = '';
-        if (pageData.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px;">No products found.</td></tr>`;
-        } else {
+            vpTableBody.innerHTML = '';
             pageData.forEach(p => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -1016,15 +1132,47 @@ function renderVendor() {
                     </td>
                     <td><span class="badge" style="background: rgba(42, 157, 143, 0.1); color: var(--primary-color);">${translations[currentLang][p.category.toLowerCase()] || p.category}</span></td>
                     <td><strong>$${p.price}</strong></td>
+                    <td><span style="color: ${p.stock <= 0 ? 'var(--danger-color)' : 'inherit'}; font-weight: bold;">${p.stock}</span></td>
                     <td style="text-align: center;">
                         <button class="btn btn-secondary" style="padding: 5px 10px;" onclick='showProductModal(${JSON.stringify(p).replace(/'/g, "&apos;")})'>${t('edit')}</button>
                         <button class="btn btn-danger" style="padding: 5px 10px;" onclick="deleteProduct('${p.id}')">${t('delete')}</button>
                     </td>
                 `;
-                tbody.appendChild(tr);
+                vpTableBody.appendChild(tr);
             });
-        }
+            renderPagination(totalPages);
+        } else {
+            let orders = store.getOrders().filter(o => o.items.some(i => i.vendorId === auth.currentUser.id));
+            const totalPages = Math.ceil(orders.length / itemsPerPage) || 1;
+            if (currentPage > totalPages) currentPage = totalPages;
 
+            const start = (currentPage - 1) * itemsPerPage;
+            const pageData = orders.slice(start, start + itemsPerPage);
+
+            voTableBody.innerHTML = '';
+            pageData.forEach(o => {
+                const customer = store.getUsers().find(u => u.id === o.userId);
+                const vendorItems = o.items.filter(i => i.vendorId === auth.currentUser.id);
+                const vendorTotal = vendorItems.reduce((sum, item) => sum + item.price, 0);
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>#${o.id.substring(1, 6)}</td>
+                    <td>${customer ? customer.name : 'Unknown User'}</td>
+                    <td><strong>$${vendorTotal.toFixed(2)}</strong></td>
+                    <td><span class="badge" style="background: var(--primary-color); color: white;">${t(o.status || 'pending')}</span></td>
+                    <td style="text-align: center;">
+                        <button class="btn btn-primary" style="padding: 5px 10px;" onclick="showOrderStatusModal('${o.id}')">${t('updateStatus')}</button>
+                        <button class="btn btn-secondary" style="padding: 5px 10px;" onclick="router.navigate('chat', {userId: '${o.userId}'})">💬</button>
+                    </td>
+                `;
+                voTableBody.appendChild(tr);
+            });
+            renderPagination(totalPages);
+        }
+    };
+
+    const renderPagination = (totalPages) => {
         paginationEl.innerHTML = `
             <button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} id="vpPrev">${t('prev')}</button>
             <span class="page-info">${t('page')} ${currentPage} / ${totalPages}</span>
@@ -1033,6 +1181,37 @@ function renderVendor() {
 
         paginationEl.querySelector('#vpPrev').onclick = () => { if (currentPage > 1) { currentPage--; updateView(); } };
         paginationEl.querySelector('#vpNext').onclick = () => { if (currentPage < totalPages) { currentPage++; updateView(); } };
+    };
+
+    window.showOrderStatusModal = (orderId) => {
+        const o = store.getOrders().find(ord => ord.id === orderId);
+        if (!o) return;
+        const m = document.createElement('div'); m.className = 'modal-overlay';
+        m.innerHTML = `
+            <div class="modal-content glass" style="max-width: 350px;">
+                <h3>${t('updateStatus')}</h3>
+                <div class="form-group">
+                    <select id="osSelect" style="width: 100%;">
+                        <option value="pending" ${o.status === 'pending' ? 'selected' : ''}>${t('pending')}</option>
+                        <option value="processing" ${o.status === 'processing' ? 'selected' : ''}>${t('processing')}</option>
+                        <option value="shipped" ${o.status === 'shipped' ? 'selected' : ''}>${t('shipped')}</option>
+                        <option value="delivered" ${o.status === 'delivered' ? 'selected' : ''}>${t('delivered')}</option>
+                        <option value="cancelled" ${o.status === 'cancelled' ? 'selected' : ''}>${t('cancelled')}</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button id="osSave" class="btn btn-primary" style="flex: 1;">${t('save')}</button>
+                    <button class="btn btn-secondary" style="flex: 1;" onclick="this.closest('.modal-overlay').remove()">${t('close')}</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(m);
+        m.querySelector('#osSave').onclick = () => {
+            o.status = m.querySelector('#osSelect').value;
+            store.updateOrder(o);
+            m.remove();
+            updateView();
+        };
     };
 
     searchInput.oninput = () => { currentPage = 1; updateView(); };
@@ -1110,14 +1289,25 @@ function renderProfile() {
                                 <div class="glass mb-4" style="padding: 15px;">
                                     <div class="flex-between">
                                         <strong>Order #${o.id.substring(1, 6)}</strong>
-                                        <span class="badge" style="background: var(--primary-color); color: white;">$${o.total.toFixed(2)}</span>
+                                        <span class="badge" style="background: var(--primary-color); color: white;">${t(o.status || 'pending')}</span>
                                     </div>
                                     <p style="font-size: 0.8rem; margin: 5px 0;">${new Date(o.timestamp).toLocaleString()}</p>
-                                    <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px;">
+                                    
+                                    <div style="margin: 10px 0; border-top: 1px solid var(--glass-border); padding-top: 10px;">
+                                        ${o.items.map(item => `
+                                            <div class="flex-between mb-2">
+                                                <span style="font-size: 0.9rem;">${item.name}</span>
+                                                ${o.status === 'delivered' ? `<button class="btn btn-secondary btn-sm" onclick="showReviewModal('${item.id}', '${item.name.replace(/'/g, "\\'")}')">${t('writeReview')}</button>` : ''}
+                                            </div>
+                                        `).join('')}
+                                    </div>
+
+                                    <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px; border-top: 1px solid var(--glass-border); padding-top: 10px;">
                                         ${[...new Set(o.items.map(i => i.vendorId))].map(vid => {
                     const v = store.getUsers().find(usr => usr.id === vid);
-                    return v ? `<button class="btn btn-secondary" style="font-size: 0.7rem; padding: 4px 8px;" onclick="router.navigate('chat', {userId: '${vid}'})">💬 Chat ${v.name}</button>` : '';
+                    return v ? `<button class="btn btn-secondary btn-sm" onclick="router.navigate('chat', {userId: '${vid}'})">💬 Chat ${v.name}</button>` : '';
                 }).join('')}
+                                        <span style="margin-left: auto; font-weight: bold;">$${o.total.toFixed(2)}</span>
                                     </div>
                                 </div>
                             `).join('')
@@ -1287,6 +1477,62 @@ window.showConfirm = (msg, onConfirm) => {
     m.onclick = (e) => { if (e.target === m) m.remove(); };
 };
 
+window.showReviewModal = (productId, productName) => {
+    const m = document.createElement('div'); m.className = 'modal-overlay';
+    m.innerHTML = `
+        <div class="modal-content glass" style="max-width: 400px;">
+            <h2>${t('writeReview')}</h2>
+            <p style="margin-bottom: 20px;">${productName}</p>
+            <div id="starRating" style="font-size: 2rem; margin-bottom: 20px; cursor: pointer;">
+                <span data-val="1">☆</span><span data-val="2">☆</span><span data-val="3">☆</span><span data-val="4">☆</span><span data-val="5">☆</span>
+            </div>
+            <textarea id="revText" rows="3" style="width: 100%; margin-bottom: 20px;" placeholder="${t('reviews')}..."></textarea>
+            <div style="display: flex; gap: 10px;">
+                <button id="revSave" class="btn btn-primary" style="flex: 1;">${t('save')}</button>
+                <button class="btn btn-secondary" style="flex: 1;" onclick="this.closest('.modal-overlay').remove()">${t('close')}</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(m);
+
+    let currentRating = 0;
+    const stars = m.querySelectorAll('#starRating span');
+    stars.forEach(s => {
+        s.onclick = () => {
+            currentRating = parseInt(s.dataset.val);
+            stars.forEach((st, idx) => st.innerText = (idx < currentRating) ? '⭐' : '☆');
+        };
+    });
+
+    m.querySelector('#revSave').onclick = () => {
+        if (currentRating === 0) { showAlert('Please select a rating'); return; }
+        store.addReview({
+            productId,
+            userId: auth.currentUser.id,
+            rating: currentRating,
+            text: m.querySelector('#revText').value
+        });
+        m.remove();
+        showAlert(t('updateSuccess'));
+        router.navigate('profile');
+    };
+};
+
+window.getProductRating = (pid) => {
+    const reviews = store.getReviews().filter(r => r.productId === pid);
+    if (reviews.length === 0) return { avg: 0, count: 0 };
+    const avg = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+    return { avg, count: reviews.length };
+};
+
+window.renderStars = (rating) => {
+    let stars = '';
+    for (let i = 1; i <= 5; i++) {
+        stars += i <= Math.round(rating) ? '⭐' : '☆';
+    }
+    return stars;
+};
+
 window.showImageModal = (title, src) => {
     const m = document.createElement('div');
     m.className = 'modal-overlay'; m.onclick = (e) => { if (e.target === m) m.remove(); };
@@ -1298,7 +1544,15 @@ window.showImageModal = (title, src) => {
 window.addToCart = (pid) => {
     if (!auth.currentUser) { showAlert(t('pleaseLogin')); router.navigate('login'); return; }
     const p = store.getProducts().find(p => p.id === pid);
-    if (p) { cart.push(p); showAlert(t('addedToCart')); updateNav(); }
+    if (p) {
+        if (p.stock <= 0) {
+            showAlert(t('outOfStock'));
+            return;
+        }
+        cart.push(p);
+        showAlert(t('addedToCart'));
+        updateNav();
+    }
 };
 
 window.approveVendor = (uid) => {
@@ -1319,7 +1573,19 @@ window.showProductModal = (product = null) => {
             <form id="pForm">
                 <div id="mImgPrev" style="width: 100%; height: 150px; background: #eee; border-radius: 12px; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid #ccc;">${product?.image ? `<img src="${product.image}" style="width: 100%; height: 100%; object-fit: cover;">` : 'No Preview'}</div>
                 <div class="form-group"><label>${t('productName')}</label><input type="text" name="name" required value="${product?.name || ''}"></div>
-                <div style="display: flex; gap: 10px;"><div style="flex: 1;"><label>${t('price')}</label><input type="number" step="0.01" name="price" required value="${product?.price || ''}"></div><div style="flex: 1;"><label>${t('category')}</label><select name="category"><option value="Beauty" ${product?.category === 'Beauty' ? 'selected' : ''}>Beauty</option><option value="Clothing" ${product?.category === 'Clothing' ? 'selected' : ''}>Clothing</option><option value="Home" ${product?.category === 'Home' ? 'selected' : ''}>Home</option></select></div></div>
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex: 1;"><label>${t('price')}</label><input type="number" step="0.01" name="price" required value="${product?.price || ''}"></div>
+                    <div style="flex: 1;"><label>${t('stock')}</label><input type="number" name="stock" required value="${product?.stock ?? 10}"></div>
+                </div>
+                <div class="form-group">
+                    <label>${t('category')}</label>
+                    <select name="category">
+                        <option value="Beauty" ${product?.category === 'Beauty' ? 'selected' : ''}>Beauty</option>
+                        <option value="Clothing" ${product?.category === 'Clothing' ? 'selected' : ''}>Clothing</option>
+                        <option value="Home" ${product?.category === 'Home' ? 'selected' : ''}>Home</option>
+                        <option value="Electronics" ${product?.category === 'Electronics' ? 'selected' : ''}>Electronics</option>
+                    </select>
+                </div>
                 <div class="form-group"><label>${t('description')}</label><textarea name="description" rows="2" required>${product?.description || ''}</textarea></div>
                 <div class="form-group"><label>${t('imageUrl')}</label><input type="text" id="mImgUrl" name="image" value="${product?.image || ''}"></div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;"><button type="submit" class="btn btn-primary" style="flex: 1;">${t('save')}</button><button type="button" class="btn btn-secondary" style="flex: 1;" onclick="this.closest('.modal-overlay').remove()">${t('close')}</button></div>
@@ -1333,7 +1599,14 @@ window.showProductModal = (product = null) => {
     m.querySelector('form').onsubmit = (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
-        const data = { name: fd.get('name'), price: parseFloat(fd.get('price')), category: fd.get('category'), description: fd.get('description'), image: fd.get('image') || '' };
+        const data = {
+            name: fd.get('name'),
+            price: parseFloat(fd.get('price')),
+            stock: parseInt(fd.get('stock')),
+            category: fd.get('category'),
+            description: fd.get('description'),
+            image: fd.get('image') || ''
+        };
         if (isEdit) store.updateProduct({ ...product, ...data });
         else store.addProduct({ id: 'p' + Date.now(), vendorId: auth.currentUser.id, ...data });
         m.remove(); router.navigate('vendor');
@@ -1349,9 +1622,19 @@ window.processPayment = (method) => {
         items: [...cart],
         total: cart.reduce((sum, item) => sum + item.price, 0),
         method: method,
-        status: 'completed',
+        status: 'pending', // Set to pending initially
         timestamp: new Date().toISOString()
     };
+
+    // Deduct stock
+    cart.forEach(item => {
+        const p = store.getProducts().find(prod => prod.id === item.id);
+        if (p) {
+            p.stock = Math.max(0, p.stock - 1);
+            store.updateProduct(p);
+        }
+    });
+
     store.addOrder(order);
 
     let msg = method === 'manual' ? t('paymentManual') : (method === 'local' ? t('paymentLocal') : t('paymentGlobal'));
