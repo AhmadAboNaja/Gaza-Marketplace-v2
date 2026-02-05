@@ -250,7 +250,7 @@ function setTheme(theme) {
 }
 
 /* --- Data & Persistence --- */
-const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwbl2yeKaaaO7OuA3CIfJqjN2722ClC2mb69w9Uxo_7Ked_1A2B32ZQD7140ogKqb6V/exec"; // PASTE YOUR GOOGLE APPS SCRIPT URL HERE
+const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbx1XSq5Foqf8-nZv8ytbO5wNXtHKJZ-FxrKr2XBkLKbes920oCl4QE9td0ZyjkGL_GM/exec"; // PASTE YOUR GOOGLE APPS SCRIPT URL HERE
 
 class DataStore {
     constructor() {
@@ -569,7 +569,7 @@ function renderHome() {
                     </p>
                     ${vendor ? `<a href="#" style="font-size: 0.8rem; color: #888; text-decoration: none;" onclick="event.preventDefault(); router.navigate('vendorShop', {id: '${vendor.id}'})">👤 ${vendor.name}</a>` : ''}
                 </div>
-                <div style="margin-bottom: 10px; font-size: 0.8rem; display: flex; align-items: center; gap: 5px;">
+                <div style="margin-bottom: 10px; font-size: 0.8rem; display: flex; align-items: center; gap: 5px; cursor: pointer;" onclick="showReviewsList('${p.id}', '${p.name.replace(/'/g, "\\'")}')">
                     ${renderStars(avg)} <span style="opacity: 0.6;">(${count})</span>
                 </div>
                 <p style="color: #666; font-size: 0.9rem; line-height: 1.4; height: 3.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
@@ -803,7 +803,7 @@ function renderVendorShop(params) {
                       <p style="font-size: 0.85rem; color: var(--primary-color); font-weight: 500;">
                           ${translations[currentLang][p.category.toLowerCase()] || p.category}
                       </p>
-                      <div style="font-size: 0.8rem;">
+                      <div style="font-size: 0.8rem; cursor: pointer;" onclick="showReviewsList('${p.id}', '${p.name.replace(/'/g, "\\'")}')">
                         ${renderStars(avg)} (${count})
                       </div>
                     </div>
@@ -1548,6 +1548,33 @@ window.renderStars = (rating) => {
         stars += i <= Math.round(rating) ? '⭐' : '☆';
     }
     return stars;
+};
+
+window.showReviewsList = (pid, name) => {
+    const reviews = store.getReviews().filter(r => r.productId === pid);
+    const m = document.createElement('div'); m.className = 'modal-overlay';
+    m.innerHTML = `
+        <div class="modal-content glass" style="max-width: 450px; text-align: left;">
+            <h2 class="mb-4">${t('reviews')}: ${name}</h2>
+            <div style="max-height: 400px; overflow-y: auto; padding-right: 10px;">
+                ${reviews.length === 0 ? `<p style="text-align: center; opacity: 0.6;">No reviews yet.</p>` : reviews.map(r => {
+        const user = store.getUsers().find(u => u.id === r.userId);
+        return `
+                        <div class="glass mb-3" style="padding: 15px; background: rgba(255,255,255,0.05);">
+                            <div class="flex-between">
+                                <strong>${user ? user.name : 'Customer'}</strong>
+                                <span>${renderStars(r.rating)}</span>
+                            </div>
+                            <p style="margin-top: 10px; font-size: 0.9rem; opacity: 0.8;">${r.text || '(No comment)'}</p>
+                            <small style="opacity: 0.5;">${new Date(r.timestamp).toLocaleDateString()}</small>
+                        </div>
+                    `;
+    }).join('')}
+            </div>
+            <button class="btn btn-secondary" style="width: 100%; margin-top: 20px;" onclick="this.closest('.modal-overlay').remove()">${t('close')}</button>
+        </div>
+    `;
+    document.body.appendChild(m);
 };
 
 window.showImageModal = (title, src) => {
