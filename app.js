@@ -80,7 +80,16 @@ const translations = {
         all: "All",
         pending: "Pending",
         approved: "Approved",
-        searchUsers: "Search users..."
+        searchUsers: "Search users...",
+        profile: "My Profile",
+        accountInfo: "Account Information",
+        editProfile: "Edit Profile",
+        updateSuccess: "Profile updated successfully!",
+        joined: "Joined",
+        orders: "My Orders",
+        saveChanges: "Save Changes",
+        accountSecurity: "Account Security",
+        newPassword: "New Password (leave blank to keep current)"
     },
     ar: {
         welcome: "أهلاً بكم في سوق غزة",
@@ -158,7 +167,16 @@ const translations = {
         all: "الكل",
         pending: "قيد الانتظار",
         approved: "مقابل",
-        searchUsers: "بحث عن مستخدمين..."
+        searchUsers: "بحث عن مستخدمين...",
+        profile: "ملفي الشخصي",
+        accountInfo: "معلومات الحساب",
+        editProfile: "تعديل الملف الشخصي",
+        updateSuccess: "تم تحديث الملف الشخصي بنجاح!",
+        joined: "انضم منذ",
+        orders: "طلباتي",
+        saveChanges: "حفظ التغييرات",
+        accountSecurity: "أمان الحساب",
+        newPassword: "كلمة مرور جديدة (اتركها فارغة للمحافظة على الحالية)"
     }
 };
 
@@ -299,6 +317,14 @@ class AuthService {
     constructor(store) {
         this.store = store;
         this.currentUser = JSON.parse(sessionStorage.getItem('currentUser')) || null;
+        if (this.currentUser) this.refreshCurrentUser();
+    }
+    refreshCurrentUser() {
+        const user = this.store.getUsers().find(u => u.id === this.currentUser.id);
+        if (user) {
+            this.currentUser = user;
+            sessionStorage.setItem('currentUser', JSON.stringify(user));
+        }
     }
     login(username, password) {
         const user = this.store.getUsers().find(u => u.username === username && u.password === password);
@@ -957,6 +983,76 @@ function renderCart() {
     return div;
 }
 
+function renderProfile() {
+    if (!auth.currentUser) return renderHome();
+    auth.refreshCurrentUser();
+    const u = auth.currentUser;
+
+    const div = document.createElement('div');
+    div.className = 'glass';
+    div.style = 'max-width: 800px; margin: 30px auto; padding: 40px;';
+    div.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 30px; margin-bottom: 40px; border-bottom: 1px solid var(--glass-border); padding-bottom: 30px;">
+            <div style="font-size: 5rem; background: var(--primary-color); color: white; width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">
+                ${u.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+                <h1>${u.name}</h1>
+                <p style="color: #666;">@${u.username} • <span class="badge" style="background: var(--primary-color); color: white;">${u.role.toUpperCase()}</span></p>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px;">
+            <div>
+                <h3>${t('accountInfo')}</h3>
+                <form id="profileForm">
+                    <div class="form-group">
+                        <label>${t('name')}</label>
+                        <input type="text" name="name" value="${u.name}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>${t('username')}</label>
+                        <input type="text" value="${u.username}" disabled style="opacity: 0.6; cursor: not-allowed;">
+                    </div>
+                    <div class="form-group">
+                        <label>${t('accountSecurity')}</label>
+                        <input type="password" name="newPassword" placeholder="${t('newPassword')}">
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">${t('saveChanges')}</button>
+                </form>
+            </div>
+            <div>
+                <h3>Quick Stats</h3>
+                <div class="glass" style="padding: 20px; margin-bottom: 20px;">
+                    <p><strong>${t('role')}:</strong> ${u.role}</p>
+                    <p><strong>${t('status')}:</strong> ${t(u.status || 'approved')}</p>
+                </div>
+                ${u.role === 'client' ? `
+                    <h3>${t('orders')}</h3>
+                    <div class="glass" style="padding: 20px; text-align: center;">
+                        <p style="color: #888;">No orders yet.</p>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+
+    div.querySelector('#profileForm').onsubmit = (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const updated = { ...u, name: fd.get('name') };
+        const newPass = fd.get('newPassword');
+        if (newPass) updated.password = newPass;
+
+        store.updateUser(updated);
+        auth.refreshCurrentUser();
+        showAlert(t('updateSuccess'));
+        router.navigate('profile');
+    };
+
+    return div;
+}
+
 /* --- Helpers --- */
 window.showAlert = (msg) => {
     const m = document.createElement('div');
@@ -1051,6 +1147,7 @@ function updateNav() {
     nav.appendChild(create(t('vendors'), () => router.navigate('vendors')));
 
     if (auth.currentUser) {
+        nav.appendChild(create(t('profile'), () => router.navigate('profile')));
         if (auth.isAdmin()) nav.appendChild(create('Admin', () => router.navigate('admin')));
         if (auth.isVendor()) nav.appendChild(create(t('vendorPortal'), () => router.navigate('vendor')));
         nav.appendChild(create(`${t('logout')} (${auth.currentUser.username})`, () => auth.logout()));
@@ -1069,6 +1166,7 @@ router.register('vendor', renderVendor);
 router.register('cart', renderCart);
 router.register('vendors', renderVendors);
 router.register('vendorShop', renderVendorShop);
+router.register('profile', renderProfile);
 
 document.addEventListener('DOMContentLoaded', async () => {
     await store.init();
