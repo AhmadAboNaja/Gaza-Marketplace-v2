@@ -288,6 +288,7 @@ class DataStore {
     getUsers() { return this.data.users; }
     getProducts() { return this.data.products; }
     getMessages() { return this.data.messages || []; }
+    getOrders() { return this.data.orders || []; }
 
     addUser(user) {
         this.data.users.push(user);
@@ -326,17 +327,42 @@ class DataStore {
         if (prod) this.pushToCloud('products', 'delete', { id });
     }
 
+    addOrder(order) {
+        if (!this.data.orders) this.data.orders = [];
+        this.data.orders.push(order);
+        this.save();
+        this.pushToCloud('orders', 'add', order);
+    }
+
     addMessage(msg) {
         if (!this.data.messages) this.data.messages = [];
         const message = {
             id: 'm' + Date.now(),
             timestamp: new Date().toISOString(),
+            read: false,
             ...msg
         };
         this.data.messages.push(message);
         this.save();
         this.pushToCloud('messages', 'add', message);
+        updateNav(); // Refresh nav to update count
         return message;
+    }
+
+    markChatAsRead(userId, partnerId) {
+        if (!this.data.messages) return;
+        let changed = false;
+        this.data.messages.forEach(m => {
+            if (m.receiverId === userId && m.senderId === partnerId && !m.read) {
+                m.read = true;
+                changed = true;
+                this.pushToCloud('messages', 'update', m);
+            }
+        });
+        if (changed) {
+            this.save();
+            updateNav();
+        }
     }
 }
 
@@ -898,6 +924,21 @@ function renderVendor() {
             <button class="btn btn-primary" onclick="showProductModal()">+ ${t('newProduct')}</button>
         </div>
 
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px;">
+            <div class="glass" style="padding: 20px; text-align: center;">
+                <h4 style="margin: 0; opacity: 0.7;">Products</h4>
+                <div style="font-size: 2rem; font-weight: bold;">${store.getProducts().filter(p => p.vendorId === auth.currentUser.id).length}</div>
+            </div>
+            <div class="glass" style="padding: 20px; text-align: center;">
+                <h4 style="margin: 0; opacity: 0.7;">Total Orders</h4>
+                <div style="font-size: 2rem; font-weight: bold;">${store.getOrders().filter(o => o.items.some(i => i.vendorId === auth.currentUser.id)).length}</div>
+            </div>
+            <div class="glass" style="padding: 20px; text-align: center;">
+                <h4 style="margin: 0; opacity: 0.7;">Chat Partners</h4>
+                <div style="font-size: 2rem; font-weight: bold;">${[...new Set(store.getMessages().filter(m => m.senderId === auth.currentUser.id || m.receiverId === auth.currentUser.id).map(m => m.senderId === auth.currentUser.id ? m.receiverId : m.senderId))].length}</div>
+            </div>
+        </div>
+
         <div class="glass" style="padding: 20px; margin-bottom: 20px;">
             <div class="search-wrap">
                 <input type="text" id="vpSearch" placeholder="${t('searchPlaceholder')}">
@@ -1060,8 +1101,25 @@ function renderProfile() {
                 </div>
                 ${u.role === 'client' ? `
                     <h3>${t('orders')}</h3>
-                    <div class="glass" style="padding: 20px; text-align: center;">
-                        <p style="color: #888;">No orders yet.</p>
+                    <div id="ordersList">
+                        ${store.getOrders().filter(o => o.userId === u.id).length === 0 ?
+                `<div class="glass" style="padding: 20px; text-align: center;"><p style="color: #888;">No orders yet.</p></div>` :
+                store.getOrders().filter(o => o.userId === u.id).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).map(o => `
+                                <div class="glass mb-4" style="padding: 15px;">
+                                    <div class="flex-between">
+                                        <strong>Order #${o.id.substring(1, 6)}</strong>
+                                        <span class="badge" style="background: var(--primary-color); color: white;">$${o.total.toFixed(2)}</span>
+                                    </div>
+                                    <p style="font-size: 0.8rem; margin: 5px 0;">${new Date(o.timestamp).toLocaleString()}</p>
+                                    <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px;">
+                                        ${[...new Set(o.items.map(i => i.vendorId))].map(vid => {
+                    const v = store.getUsers().find(usr => usr.id === vid);
+                    return v ? `<button class="btn btn-secondary" style="font-size: 0.7rem; padding: 4px 8px;" onclick="router.navigate('chat', {userId: '${vid}'})">💬 Chat ${v.name}</button>` : '';
+                }).join('')}
+                                    </div>
+                                </div>
+                            `).join('')
+            }
                     </div>
                 ` : ''}
             </div>
@@ -1095,11 +1153,18 @@ function renderConversations() {
     messages.forEach(m => {
         if (m.senderId === u.id || m.receiverId === u.id) {
             const partnerId = m.senderId === u.id ? m.receiverId : m.senderId;
-            if (!chats[partnerId] || new Date(m.timestamp) > new Date(chats[partnerId].lastMessage.timestamp)) {
+            if (!chats[partnerId]) {
                 chats[partnerId] = {
                     partner: users.find(usr => usr.id === partnerId),
-                    lastMessage: m
+                    lastMessage: m,
+                    unreadCount: 0
                 };
+            }
+            if (new Date(m.timestamp) > new Date(chats[partnerId].lastMessage.timestamp)) {
+                chats[partnerId].lastMessage = m;
+            }
+            if (m.receiverId === u.id && !m.read) {
+                chats[partnerId].unreadCount++;
             }
         }
     });
@@ -1113,9 +1178,9 @@ function renderConversations() {
             <div class="glass conversations-list">
                 ${Object.values(chats).length === 0 ? `<p style="padding: 20px; text-align: center; color: #888;">${t('noMessages')}</p>` :
             Object.values(chats).sort((a, b) => new Date(b.lastMessage.timestamp) - new Date(a.lastMessage.timestamp)).map(c => `
-                    <div class="glass conversation-item" onclick="router.navigate('chat', {userId: '${c.partner.id}'})">
+                    <div class="glass conversation-item ${c.unreadCount > 0 ? 'unread' : ''}" onclick="router.navigate('chat', {userId: '${c.partner.id}'})">
                         <div class="flex-between">
-                            <strong>${c.partner.name}</strong>
+                            <strong>${c.partner.name} ${c.unreadCount > 0 ? `<span class="badge" style="background: var(--danger-color); font-size: 0.6rem; color: white;">${c.unreadCount}</span>` : ''}</strong>
                             <span style="font-size: 0.7rem; opacity: 0.6;">${new Date(c.lastMessage.timestamp).toLocaleDateString()}</span>
                         </div>
                         <p style="font-size: 0.85rem; opacity: 0.8; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
@@ -1168,6 +1233,7 @@ function renderChat(params) {
     const form = section.querySelector('#chatInputArea');
 
     const refreshMessages = () => {
+        store.markChatAsRead(u.id, partnerId);
         const msgs = store.getMessages().filter(m =>
             (m.senderId === u.id && m.receiverId === partnerId) ||
             (m.senderId === partnerId && m.receiverId === u.id)
@@ -1279,8 +1345,20 @@ window.showProductModal = (product = null) => {
 };
 
 window.processPayment = (method) => {
+    if (cart.length === 0) return;
+    const order = {
+        id: 'o' + Date.now(),
+        userId: auth.currentUser.id,
+        items: [...cart],
+        total: cart.reduce((sum, item) => sum + item.price, 0),
+        method: method,
+        status: 'completed',
+        timestamp: new Date().toISOString()
+    };
+    store.addOrder(order);
+
     let msg = method === 'manual' ? t('paymentManual') : (method === 'local' ? t('paymentLocal') : t('paymentGlobal'));
-    showAlert(msg); cart.length = 0; router.navigate('home');
+    showAlert(msg); cart.length = 0; updateNav(); router.navigate('home');
 };
 
 function updateNav() {
@@ -1299,7 +1377,9 @@ function updateNav() {
     nav.appendChild(create(t('vendors'), () => router.navigate('vendors')));
 
     if (auth.currentUser) {
-        nav.appendChild(create(t('messages'), () => router.navigate('conversations')));
+        const unreadCount = store.getMessages().filter(m => m.receiverId === auth.currentUser.id && !m.read).length;
+        const msgLabel = unreadCount > 0 ? `${t('messages')} (${unreadCount})` : t('messages');
+        nav.appendChild(create(msgLabel, () => router.navigate('conversations')));
         nav.appendChild(create(t('profile'), () => router.navigate('profile')));
         if (auth.isAdmin()) nav.appendChild(create('Admin', () => router.navigate('admin')));
         if (auth.isVendor()) nav.appendChild(create(t('vendorPortal'), () => router.navigate('vendor')));
