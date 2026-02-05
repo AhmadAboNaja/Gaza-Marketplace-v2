@@ -89,7 +89,14 @@ const translations = {
         orders: "My Orders",
         saveChanges: "Save Changes",
         accountSecurity: "Account Security",
-        newPassword: "New Password (leave blank to keep current)"
+        newPassword: "New Password (leave blank to keep current)",
+        chat: "Chat",
+        chatWithVendor: "Chat with Vendor",
+        messages: "Messages",
+        send: "Send",
+        typeMessage: "Type a message...",
+        noMessages: "No messages yet. Start a conversation!",
+        selectChat: "Select a conversation to start chatting"
     },
     ar: {
         welcome: "أهلاً بكم في سوق غزة",
@@ -176,7 +183,14 @@ const translations = {
         orders: "طلباتي",
         saveChanges: "حفظ التغييرات",
         accountSecurity: "أمان الحساب",
-        newPassword: "كلمة مرور جديدة (اتركها فارغة للمحافظة على الحالية)"
+        newPassword: "كلمة مرور جديدة (اتركها فارغة للمحافظة على الحالية)",
+        chat: "محادثة",
+        chatWithVendor: "مراسلة البائع",
+        messages: "الرسائل",
+        send: "إرسال",
+        typeMessage: "اكتب رسالة...",
+        noMessages: "لا توجد رسائل بعد. ابدأ محادثة!",
+        selectChat: "اختر محادثة لبدء الدردشة"
     }
 };
 
@@ -210,7 +224,7 @@ const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwYRgT3Z2ma23
 
 class DataStore {
     constructor() {
-        this.data = { users: [], products: [], orders: [] };
+        this.data = { users: [], products: [], orders: [], messages: [] };
         // Initial setup
         this.init();
     }
@@ -273,6 +287,7 @@ class DataStore {
     // CRUD Helpers
     getUsers() { return this.data.users; }
     getProducts() { return this.data.products; }
+    getMessages() { return this.data.messages || []; }
 
     addUser(user) {
         this.data.users.push(user);
@@ -309,6 +324,19 @@ class DataStore {
         this.data.products = this.data.products.filter(p => p.id !== id);
         this.save();
         if (prod) this.pushToCloud('products', 'delete', { id });
+    }
+
+    addMessage(msg) {
+        if (!this.data.messages) this.data.messages = [];
+        const message = {
+            id: 'm' + Date.now(),
+            timestamp: new Date().toISOString(),
+            ...msg
+        };
+        this.data.messages.push(message);
+        this.save();
+        this.pushToCloud('messages', 'add', message);
+        return message;
     }
 }
 
@@ -598,7 +626,10 @@ function renderVendorShop(params) {
             <div>
                 <h1>${vendor.name}</h1>
                 <p>${t('allProductsBy')} ${vendor.name}</p>
-                <button class="btn btn-secondary mt-4" onclick="router.navigate('vendors')">← ${t('backToVendors')}</button>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn btn-secondary" onclick="router.navigate('vendors')">← ${t('backToVendors')}</button>
+                    ${auth.currentUser && auth.currentUser.id !== vendor.id ? `<button class="btn btn-primary" onclick="router.navigate('chat', {userId: '${vendor.id}'})">💬 ${t('chatWithVendor')}</button>` : ''}
+                </div>
             </div>
         </div>
 
@@ -1053,6 +1084,127 @@ function renderProfile() {
     return div;
 }
 
+function renderConversations() {
+    if (!auth.currentUser) return renderHome();
+    const u = auth.currentUser;
+    const messages = store.getMessages();
+    const users = store.getUsers();
+
+    // Group messages by conversation partner
+    const chats = {};
+    messages.forEach(m => {
+        if (m.senderId === u.id || m.receiverId === u.id) {
+            const partnerId = m.senderId === u.id ? m.receiverId : m.senderId;
+            if (!chats[partnerId] || new Date(m.timestamp) > new Date(chats[partnerId].lastMessage.timestamp)) {
+                chats[partnerId] = {
+                    partner: users.find(usr => usr.id === partnerId),
+                    lastMessage: m
+                };
+            }
+        }
+    });
+
+    const section = document.createElement('section');
+    section.innerHTML = `
+        <div class="glass" style="padding: 30px; margin-bottom: 30px;">
+            <h1>${t('messages')}</h1>
+        </div>
+        <div class="chat-container">
+            <div class="glass conversations-list">
+                ${Object.values(chats).length === 0 ? `<p style="padding: 20px; text-align: center; color: #888;">${t('noMessages')}</p>` :
+            Object.values(chats).sort((a, b) => new Date(b.lastMessage.timestamp) - new Date(a.lastMessage.timestamp)).map(c => `
+                    <div class="glass conversation-item" onclick="router.navigate('chat', {userId: '${c.partner.id}'})">
+                        <div class="flex-between">
+                            <strong>${c.partner.name}</strong>
+                            <span style="font-size: 0.7rem; opacity: 0.6;">${new Date(c.lastMessage.timestamp).toLocaleDateString()}</span>
+                        </div>
+                        <p style="font-size: 0.85rem; opacity: 0.8; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            ${c.lastMessage.senderId === u.id ? 'You: ' : ''}${c.lastMessage.text}
+                        </p>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="glass chat-window" style="justify-content: center; align-items: center; background: rgba(0,0,0,0.05);">
+                <div style="text-align: center; opacity: 0.5;">
+                    <div style="font-size: 4rem;">💬</div>
+                    <p>${t('selectChat')}</p>
+                </div>
+            </div>
+        </div>
+    `;
+    return section;
+}
+
+function renderChat(params) {
+    if (!auth.currentUser) return renderHome();
+    const u = auth.currentUser;
+    const partnerId = params.userId;
+    const partner = store.getUsers().find(usr => usr.id === partnerId);
+    if (!partner) return renderHome();
+
+    const section = document.createElement('section');
+    section.innerHTML = `
+        <div class="glass" style="padding: 20px 30px; margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
+            <button class="btn btn-secondary" onclick="router.navigate('conversations')" style="padding: 5px 10px;">←</button>
+            <div style="width: 40px; height: 40px; background: var(--primary-color); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+                ${partner.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+                <h3 style="margin: 0;">${partner.name}</h3>
+                <span class="badge" style="font-size: 0.7rem; background: rgba(0,0,0,0.1);">${partner.role}</span>
+            </div>
+        </div>
+        <div class="glass chat-window" style="height: 60vh;">
+            <div id="messagesDisplay" class="messages-display"></div>
+            <form id="chatInputArea" class="chat-input-area">
+                <input type="text" id="msgInput" placeholder="${t('typeMessage')}" required autocomplete="off">
+                <button type="submit" class="btn btn-primary">${t('send')}</button>
+            </form>
+        </div>
+    `;
+
+    const display = section.querySelector('#messagesDisplay');
+    const input = section.querySelector('#msgInput');
+    const form = section.querySelector('#chatInputArea');
+
+    const refreshMessages = () => {
+        const msgs = store.getMessages().filter(m =>
+            (m.senderId === u.id && m.receiverId === partnerId) ||
+            (m.senderId === partnerId && m.receiverId === u.id)
+        );
+        display.innerHTML = msgs.map(m => `
+            <div class="message-bubble ${m.senderId === u.id ? 'message-sent' : 'message-received'}">
+                ${m.text}
+                <span class="message-time">${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+        `).join('');
+        display.scrollTop = display.scrollHeight;
+    };
+
+    form.onsubmit = (e) => {
+        e.preventDefault();
+        const text = input.value.trim();
+        if (text) {
+            store.addMessage({
+                senderId: u.id,
+                receiverId: partnerId,
+                text: text
+            });
+            input.value = '';
+            refreshMessages();
+        }
+    };
+
+    setTimeout(refreshMessages, 50);
+    // Poll for new messages every 3 seconds (simulated real-time)
+    const interval = setInterval(() => {
+        if (router.currentRoute === 'chat') refreshMessages();
+        else clearInterval(interval);
+    }, 3000);
+
+    return section;
+}
+
 /* --- Helpers --- */
 window.showAlert = (msg) => {
     const m = document.createElement('div');
@@ -1147,6 +1299,7 @@ function updateNav() {
     nav.appendChild(create(t('vendors'), () => router.navigate('vendors')));
 
     if (auth.currentUser) {
+        nav.appendChild(create(t('messages'), () => router.navigate('conversations')));
         nav.appendChild(create(t('profile'), () => router.navigate('profile')));
         if (auth.isAdmin()) nav.appendChild(create('Admin', () => router.navigate('admin')));
         if (auth.isVendor()) nav.appendChild(create(t('vendorPortal'), () => router.navigate('vendor')));
@@ -1167,6 +1320,8 @@ router.register('cart', renderCart);
 router.register('vendors', renderVendors);
 router.register('vendorShop', renderVendorShop);
 router.register('profile', renderProfile);
+router.register('conversations', renderConversations);
+router.register('chat', renderChat);
 
 document.addEventListener('DOMContentLoaded', async () => {
     await store.init();
