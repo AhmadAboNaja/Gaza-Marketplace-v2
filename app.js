@@ -12,6 +12,7 @@ const translations = {
         beauty: "Beauty",
         clothing: "Clothing",
         home: "Home",
+        electronics: "Electronics",
         login: "Login",
         username: "Username",
         password: "Password",
@@ -111,7 +112,17 @@ const translations = {
         pending: "Pending",
         updateStatus: "Update Status",
         customer: "Customer",
-        items: "Items"
+        items: "Items",
+        sortBy: "Sort By",
+        priceLow: "Price: Low to High",
+        priceHigh: "Price: High to Low",
+        topRated: "Top Rated",
+        newest: "Newest",
+        wishlist: "My Wishlist",
+        minPrice: "Min Price",
+        maxPrice: "Max Price",
+        addedToWishlist: "Saved to Wishlist!",
+        removedFromWishlist: "Removed from Wishlist"
     },
     ar: {
         welcome: "أهلاً بكم في سوق غزة",
@@ -121,6 +132,7 @@ const translations = {
         beauty: "الجمال والعناية",
         clothing: "الملابس والأزياء",
         home: "المنزل والديكور",
+        electronics: "الإلكترونيات",
         login: "تسجيل الدخول",
         username: "اسم المستخدم",
         password: "كلمة المرور",
@@ -219,7 +231,17 @@ const translations = {
         cancelled: "ملغي",
         updateStatus: "تحديث حالة الطلب",
         customer: "اسم العميل",
-        items: "الأصناف"
+        items: "الأصناف",
+        sortBy: "ترتيب حسب",
+        priceLow: "السعر: من الأقل للأعلى",
+        priceHigh: "السعر: من الأعلى للأقل",
+        topRated: "الأعلى تقييماً",
+        newest: "الأحدث",
+        wishlist: "قائمة أمنياتي",
+        minPrice: "أقل سعر",
+        maxPrice: "أعلى سعر",
+        addedToWishlist: "تمت الإضافة للمفضلة!",
+        removedFromWishlist: "تم الحذف من المفضلة"
     }
 };
 
@@ -253,7 +275,7 @@ const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbx1XSq5Foqf8-
 
 class DataStore {
     constructor() {
-        this.data = { users: [], products: [], orders: [], messages: [], reviews: [] };
+        this.data = { users: [], products: [], orders: [], messages: [], reviews: [], wishlists: [] };
         // Initial setup
         this.init();
     }
@@ -431,6 +453,28 @@ class DataStore {
             updateNav();
         }
     }
+
+    getWishlist(userId) {
+        return (this.data.wishlists || []).filter(w => w.userId === userId).map(w => w.productId);
+    }
+
+    toggleWishlist(userId, productId) {
+        if (!this.data.wishlists) this.data.wishlists = [];
+        const index = this.data.wishlists.findIndex(w => w.userId === userId && w.productId === productId);
+        if (index > -1) {
+            const item = this.data.wishlists[index];
+            this.data.wishlists.splice(index, 1);
+            this.pushToCloud('wishlists', 'delete', item);
+            this.save();
+            return false;
+        } else {
+            const newItem = { id: 'w' + Date.now(), userId, productId };
+            this.data.wishlists.push(newItem);
+            this.pushToCloud('wishlists', 'add', newItem);
+            this.save();
+            return true;
+        }
+    }
 }
 
 /* --- Auth System --- */
@@ -509,79 +553,109 @@ const cart = [];
 function renderHome() {
     const section = document.createElement('section');
     section.innerHTML = `
-        <div class="glass" style="padding: 40px; text-align: center; margin-bottom: 30px;">
+        <div class="hero glass mb-4">
             <h1>${t('welcome')}</h1>
             <p>${t('subtitle')}</p>
-            <div style="margin-top: 20px;">
-                <input type="text" id="searchBar" placeholder="${t('searchPlaceholder')}" style="max-width: 300px;">
-                <select id="catFilter" style="max-width: 150px; margin-left: 10px;">
+            <div class="search-wrap" style="margin-top: 20px;">
+                <input type="text" id="mainSearch" placeholder="${t('searchPlaceholder')}">
+                <select id="catFilter" style="width: auto;">
                     <option value="">${t('allCategories')}</option>
-                    ${[...new Set(store.getProducts().map(p => p.category))].map(c =>
-        `<option value="${c}">${translations[currentLang][c.toLowerCase()] || c}</option>`
-    ).join('')}
+                    ${[...new Set(store.getProducts().map(p => p.category))].map(c => `<option value="${c}">${translations[currentLang][c.toLowerCase()] || c}</option>`).join('')}
                 </select>
             </div>
-        </div>
-        <div id="productGrid" class="grid-products"></div>
-        <div class="flex-between" style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
-            <div id="pagination" class="pagination" style="margin-top: 0;"></div>
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <label style="font-size: 0.9rem;">${t('itemsPerPage')}:</label>
-                <select id="itemsPerPage" style="width: auto; padding: 5px 10px;">
-                    <option value="8">8</option><option value="16">16</option><option value="32">32</option><option value="64">64</option>
-                </select>
+            <div class="filter-bar glass" style="margin-top: 15px; padding: 15px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; justify-content: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <select id="sortBy" style="width: auto;">
+                        <option value="newest">${t('sortBy')}: ${t('newest')}</option>
+                        <option value="priceLow">${t('priceLow')}</option>
+                        <option value="priceHigh">${t('priceHigh')}</option>
+                        <option value="topRated">${t('topRated')}</option>
+                    </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="number" id="minPrice" placeholder="${t('minPrice')}" style="width: 100px;">
+                    <span>-</span>
+                    <input type="number" id="maxPrice" placeholder="${t('maxPrice')}" style="width: 100px;">
+                </div>
             </div>
         </div>
+        <div class="product-grid" id="productGrid"></div>
+        <div id="homePagination" class="pagination"></div>
     `;
+
     const grid = section.querySelector('#productGrid');
-    const paginationEl = section.querySelector('#pagination');
-    const itemsPerEl = section.querySelector('#itemsPerPage');
+    const searchInput = section.querySelector('#mainSearch');
+    const catFilter = section.querySelector('#catFilter');
+    const sortBySelect = section.querySelector('#sortBy');
+    const minPriceInput = section.querySelector('#minPrice');
+    const maxPriceInput = section.querySelector('#maxPrice');
+    const paginationEl = section.querySelector('#homePagination');
+
     let currentPage = 1;
+    const itemsPerPage = 6;
 
-    const renderProducts = () => {
-        const filter = section.querySelector('#searchBar').value;
-        const category = section.querySelector('#catFilter').value;
-        const itemsPerPage = parseInt(itemsPerEl.value);
+    const render = () => {
+        let products = store.getProducts();
+        const query = searchInput.value.toLowerCase();
+        const cat = catFilter.value;
+        const sort = sortBySelect.value;
+        const minP = parseFloat(minPriceInput.value) || 0;
+        const maxP = parseFloat(maxPriceInput.value) || Infinity;
+
+        if (query) products = products.filter(p => p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query));
+        if (cat) products = products.filter(p => p.category === cat);
+
+        products = products.filter(p => p.price >= minP && p.price <= maxP);
+
+        // Sorting
+        if (sort === 'priceLow') products.sort((a, b) => a.price - b.price);
+        else if (sort === 'priceHigh') products.sort((a, b) => b.price - a.price);
+        else if (sort === 'topRated') products.sort((a, b) => getProductRating(b.id).avg - getProductRating(a.id).avg);
+        else products.sort((a, b) => b.id.localeCompare(a.id));
+
+        const totalPages = Math.ceil(products.length / itemsPerPage) || 1;
+        if (currentPage > totalPages) currentPage = totalPages;
+        const pageData = products.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
         grid.innerHTML = '';
-        let prods = store.getProducts();
-        if (filter) prods = prods.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
-        if (category) prods = prods.filter(p => p.category === category);
-
-        const totalPages = Math.ceil(prods.length / itemsPerPage);
-        if (currentPage > totalPages) currentPage = totalPages || 1;
-        const paginated = prods.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-        paginated.forEach(p => {
+        pageData.forEach(p => {
             const card = document.createElement('div');
             card.className = 'glass product-card';
-            const isReal = p.image && (p.image.startsWith('http') || p.image.startsWith('data:image'));
-            const vendor = store.getUsers().find(u => u.id === p.vendorId);
             const { avg, count } = getProductRating(p.id);
+            const vendor = store.getUsers().find(u => u.id === p.vendorId);
             const isSoldOut = p.stock <= 0;
+            const inWishlist = auth.currentUser ? store.getWishlist(auth.currentUser.id).includes(p.id) : false;
 
             card.innerHTML = `
-                ${isReal ? `<img src="${p.image}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 15px; cursor: pointer; ${isSoldOut ? 'filter: grayscale(1);' : ''}" onclick="showImageModal('${p.name}', '${p.image}')">` : `<div class="text-img-placeholder" onclick="showImageModal('${p.name}', '${p.image}')">[${p.name}]</div>`}
-                <h3>${p.name}</h3>
-                <div class="flex-between" style="margin-bottom: 5px;">
-                    <p style="font-size: 0.85rem; color: var(--primary-color); font-weight: 500;">
-                        ${translations[currentLang][p.category.toLowerCase()] || p.category}
+                <div style="position: relative;">
+                    ${p.image ? `<img src="${p.image}" style="width: 100%; height: 200px; object-fit: cover; border-radius: 12px; margin-bottom: 15px; cursor: pointer; ${isSoldOut ? 'filter: grayscale(1);' : ''}" onclick="showImageModal('${p.name}', '${p.image}')">` : `<div class="text-img-placeholder" onclick="showImageModal('${p.name}', '${p.image}')">[${p.name}]</div>`}
+                    <button class="wishlist-btn ${inWishlist ? 'active' : ''}" onclick="toggleWishlist('${p.id}')" style="position: absolute; top: 10px; right: 10px; border: none; background: rgba(255,255,255,0.8); border-radius: 50%; width: 35px; height: 35px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: all 0.3s ease;">
+                        ${inWishlist ? '❤️' : '🤍'}
+                    </button>
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column;">
+                    <div class="flex-between" style="margin-bottom: 5px;">
+                        <h3 style="font-size: 1.1rem; margin: 0;">${p.name}</h3>
+                        <div style="text-align: right;">
+                            <span style="font-weight: bold; color: var(--primary-color); display: block;">$${p.price}</span>
+                            ${isSoldOut ? `<span style="font-size: 0.7rem; color: var(--danger-color); font-weight: bold;">${t('soldOut')}</span>` : `<span style="font-size: 0.7rem; color: #2a9d8f;">${t('stock')}: ${p.stock}</span>`}
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <p style="font-size: 0.85rem; color: var(--primary-color); font-weight: 500; margin-bottom: 2px;">
+                            ${translations[currentLang][p.category.toLowerCase()] || p.category}
+                        </p>
+                        ${vendor ? `<a href="#" style="font-size: 0.8rem; color: #888; text-decoration: none;" onclick="event.preventDefault(); router.navigate('vendorShop', {id: '${vendor.id}'})">👤 ${vendor.name}</a>` : ''}
+                    </div>
+                    <div style="margin-bottom: 10px; font-size: 0.8rem; display: flex; align-items: center; gap: 5px; cursor: pointer;" onclick="showReviewsList('${p.id}', '${p.name.replace(/'/g, "\\'")}')">
+                        ${renderStars(avg)} <span style="opacity: 0.6;">(${count})</span>
+                    </div>
+                    <p style="color: #666; font-size: 0.9rem; line-height: 1.4; height: 3.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
+                        ${p.description}
                     </p>
-                    ${vendor ? `<a href="#" style="font-size: 0.8rem; color: #888; text-decoration: none;" onclick="event.preventDefault(); router.navigate('vendorShop', {id: '${vendor.id}'})">👤 ${vendor.name}</a>` : ''}
-                </div>
-                <div style="margin-bottom: 10px; font-size: 0.8rem; display: flex; align-items: center; gap: 5px; cursor: pointer;" onclick="showReviewsList('${p.id}', '${p.name.replace(/'/g, "\\'")}')">
-                    ${renderStars(avg)} <span style="opacity: 0.6;">(${count})</span>
-                </div>
-                <p style="color: #666; font-size: 0.9rem; line-height: 1.4; height: 3.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
-                    ${p.description}
-                </p>
-                <div class="flex-between" style="margin-top: 10px; font-size: 0.85rem;">
-                    <span style="color: ${isSoldOut ? 'var(--danger-color)' : '#2a9d8f'}; font-weight: bold;">
-                        ${isSoldOut ? t('soldOut') : `${t('stock')}: ${p.stock}`}
-                    </span>
-                </div>
-                <div class="flex-between" style="margin-top: auto; padding-top: 15px;">
-                    <span style="font-weight: bold; color: var(--primary-color); font-size: 1.1rem;">$${p.price}</span>
-                    ${!auth.isVendor() ? `<button class="btn ${isSoldOut ? 'btn-secondary' : 'btn-primary'}" onclick="addToCart('${p.id}')" ${isSoldOut ? 'disabled' : ''}>${isSoldOut ? t('soldOut') : t('addToCart')}</button>` : ''}
+                    <div style="margin-top: auto; padding-top: 15px;">
+                        ${!auth.isVendor() ? `<button class="btn ${isSoldOut ? 'btn-secondary' : 'btn-primary'}" style="width: 100%;" onclick="addToCart('${p.id}')" ${isSoldOut ? 'disabled' : ''}>${isSoldOut ? t('soldOut') : t('addToCart')}</button>` : ''}
+                    </div>
                 </div>
             `;
             grid.appendChild(card);
@@ -1474,6 +1548,51 @@ function renderChat(params) {
     return section;
 }
 
+function renderWishlist() {
+    if (!auth.currentUser) return renderHome();
+    const section = document.createElement('section');
+    section.innerHTML = `
+        <div class="hero glass mb-4">
+            <h1>${t('wishlist')}</h1>
+            <p>${t('subtitle')}</p>
+        </div>
+        <div class="product-grid" id="wishlistGrid"></div>
+    `;
+
+    const grid = section.querySelector('#wishlistGrid');
+    const wishlistIds = store.getWishlist(auth.currentUser.id);
+    const products = store.getProducts().filter(p => wishlistIds.includes(p.id));
+
+    if (products.length === 0) {
+        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px;">${t('empty')}</div>`;
+    } else {
+        products.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'glass product-card';
+            const { avg, count } = getProductRating(p.id);
+            const isSoldOut = p.stock <= 0;
+
+            card.innerHTML = `
+                <div style="position: relative;">
+                    ${p.image ? `<img src="${p.image}" style="width: 100%; height: 200px; object-fit: cover; border-radius: 12px; margin-bottom: 15px; cursor: pointer; ${isSoldOut ? 'filter: grayscale(1);' : ''}" onclick="showImageModal('${p.name}', '${p.image}')">` : `<div class="text-img-placeholder" onclick="showImageModal('${p.name}', '${p.image}')">[${p.name}]</div>`}
+                    <button class="wishlist-btn active" onclick="toggleWishlist('${p.id}')" style="position: absolute; top: 10px; right: 10px; border: none; background: rgba(255,255,255,0.8); border-radius: 50%; width: 35px; height: 35px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                        ❤️
+                    </button>
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 10px;">${p.name}</h3>
+                    <div class="flex-between" style="margin-top: auto;">
+                        <span style="font-weight: bold; color: var(--primary-color);">$${p.price}</span>
+                        ${!auth.isVendor() ? `<button class="btn ${isSoldOut ? 'btn-secondary' : 'btn-primary'}" onclick="addToCart('${p.id}')" ${isSoldOut ? 'disabled' : ''}>${isSoldOut ? t('soldOut') : t('addToCart')}</button>` : ''}
+                    </div>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+    return section;
+}
+
 /* --- Helpers --- */
 window.showAlert = (msg) => {
     const m = document.createElement('div');
@@ -1703,6 +1822,7 @@ function updateNav() {
         const unreadCount = store.getMessages().filter(m => m.receiverId === auth.currentUser.id && !m.read).length;
         const msgLabel = unreadCount > 0 ? `${t('messages')} (${unreadCount})` : t('messages');
         nav.appendChild(create(msgLabel, () => router.navigate('conversations')));
+        nav.appendChild(create(t('wishlist'), () => router.navigate('wishlist')));
         nav.appendChild(create(t('profile'), () => router.navigate('profile')));
         if (auth.isAdmin()) nav.appendChild(create('Admin', () => router.navigate('admin')));
         if (auth.isVendor()) nav.appendChild(create(t('vendorPortal'), () => router.navigate('vendor')));
@@ -1725,6 +1845,7 @@ router.register('vendorShop', renderVendorShop);
 router.register('profile', renderProfile);
 router.register('conversations', renderConversations);
 router.register('chat', renderChat);
+router.register('wishlist', renderWishlist);
 
 document.addEventListener('DOMContentLoaded', async () => {
     await store.init();

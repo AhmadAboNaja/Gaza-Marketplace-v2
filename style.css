@@ -474,8 +474,19 @@ textarea {
   font-size: 0.75rem;
 }
 
-.v-tab.active {
-  background: var(--primary-color) !important;
-  color: white !important;
-  border: none;
+.wishlist-btn:hover {
+  transform: scale(1.1);
+  background: white !important;
+}
+
+.wishlist-btn.active {
+  color: #e63946;
+}
+
+.filter-bar input,
+.filter-bar select {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--glass-border);
+  color: inherit;
+  font-size: 0.9rem;
 }
