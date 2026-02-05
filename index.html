@@ -12,8 +12,13 @@
 <body>
 
     <nav class="glass">
-        <div class="brand" onclick="router.navigate('home')" style="cursor: pointer;">
-            <span style="font-size: 1.5rem; font-weight: bold; color: var(--primary-color);">GazaMarket</span>
+        <div class="brand" onclick="router.navigate('home')"
+            style="cursor: pointer; display: flex; align-items: center; gap: 10px;">
+            <div
+                style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 1.2rem; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);">
+                G</div>
+            <span
+                style="font-size: 1.6rem; font-weight: 700; background: linear-gradient(to right, var(--primary-color), var(--secondary-color)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -1px;">GazaMarket</span>
         </div>
         <div class="nav-links" id="navRight">
             <!-- Dynamic Links Injected by JS -->

@@ -556,26 +556,35 @@ function renderHome() {
         <div class="hero glass mb-4">
             <h1>${t('welcome')}</h1>
             <p>${t('subtitle')}</p>
-            <div class="search-wrap" style="margin-top: 20px;">
-                <input type="text" id="mainSearch" placeholder="${t('searchPlaceholder')}">
-                <select id="catFilter" style="width: auto;">
-                    <option value="">${t('allCategories')}</option>
-                    ${[...new Set(store.getProducts().map(p => p.category))].map(c => `<option value="${c}">${translations[currentLang][c.toLowerCase()] || c}</option>`).join('')}
-                </select>
-            </div>
-            <div class="filter-bar glass" style="margin-top: 15px; padding: 15px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; justify-content: center;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <select id="sortBy" style="width: auto;">
-                        <option value="newest">${t('sortBy')}: ${t('newest')}</option>
-                        <option value="priceLow">${t('priceLow')}</option>
-                        <option value="priceHigh">${t('priceHigh')}</option>
-                        <option value="topRated">${t('topRated')}</option>
+            <div class="search-group glass shadow-lg" style="margin-top: 40px; padding: 30px; border-radius: 20px;">
+                <div class="search-wrap" style="display: grid; grid-template-columns: 1fr auto; gap: 15px; margin-bottom: 20px;">
+                    <div style="position: relative;">
+                        <input type="text" id="mainSearch" placeholder="${t('searchPlaceholder')}" style="padding-left: 45px;">
+                        <span style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); opacity: 0.5;">🔍</span>
+                    </div>
+                    <select id="catFilter" style="width: auto; min-width: 150px;">
+                        <option value="">${t('allCategories')}</option>
+                        ${[...new Set(store.getProducts().map(p => p.category))].map(c => `<option value="${c}">${translations[currentLang][c.toLowerCase()] || c}</option>`).join('')}
                     </select>
                 </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <input type="number" id="minPrice" placeholder="${t('minPrice')}" style="width: 100px;">
-                    <span>-</span>
-                    <input type="number" id="maxPrice" placeholder="${t('maxPrice')}" style="width: 100px;">
+                <div class="filter-bar" style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: center; padding-top: 20px; border-top: 1px solid var(--glass-border);">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 0.9rem; opacity: 0.6;">⚡ ${t('sortBy')}</span>
+                        <select id="sortBy" style="width: auto;">
+                            <option value="newest">${t('newest')}</option>
+                            <option value="priceLow">${t('priceLow')}</option>
+                            <option value="priceHigh">${t('priceHigh')}</option>
+                            <option value="topRated">${t('topRated')}</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 0.9rem; opacity: 0.6;">💰 ${t('price')}</span>
+                        <div style="display: flex; gap: 5px; align-items: center;">
+                            <input type="number" id="minPrice" placeholder="${t('minPrice')}" style="width: 110px;">
+                            <span style="opacity: 0.3;">/</span>
+                            <input type="number" id="maxPrice" placeholder="${t('maxPrice')}" style="width: 110px;">
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
