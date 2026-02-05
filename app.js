@@ -284,10 +284,27 @@ class DataStore {
             const bust = Date.now();
             const response = await fetch(`${GOOGLE_SHEETS_URL}?action=getAll&_cb=${bust}`);
             const cloudData = await response.json();
-            if (cloudData && cloudData.users) {
-                this.data = cloudData;
+
+            if (cloudData && typeof cloudData === 'object') {
+                // DATA SANITIZATION: Trim keys (fixes issues like "stock " vs "stock")
+                const sanitized = {};
+                for (let tab in cloudData) {
+                    if (Array.isArray(cloudData[tab])) {
+                        sanitized[tab] = cloudData[tab].map(row => {
+                            const newRow = {};
+                            for (let key in row) {
+                                newRow[key.trim()] = row[key];
+                            }
+                            return newRow;
+                        });
+                    } else {
+                        sanitized[tab] = cloudData[tab];
+                    }
+                }
+
+                this.data = sanitized;
                 this.save();
-                if (!silent) console.log("Cloud sync complete.");
+                if (!silent) console.log("Cloud sync complete (sanitized).");
                 if (!silent && router.currentRoute) router.navigate(router.currentRoute);
                 return true;
             }
