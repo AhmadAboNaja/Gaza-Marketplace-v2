@@ -250,11 +250,14 @@ class DataStore {
 
     async syncWithCloud(silent = false) {
         try {
-            const response = await fetch(`${GOOGLE_SHEETS_URL}?action=getAll`);
+            // Add a timestamp to the URL to prevent browser caching
+            const bust = Date.now();
+            const response = await fetch(`${GOOGLE_SHEETS_URL}?action=getAll&_cb=${bust}`);
             const cloudData = await response.json();
             if (cloudData && cloudData.users) {
                 this.data = cloudData;
                 this.save();
+                if (!silent) console.log("Cloud sync complete.");
                 if (!silent && router.currentRoute) router.navigate(router.currentRoute);
                 return true;
             }
