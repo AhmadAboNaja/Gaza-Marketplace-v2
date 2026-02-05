@@ -575,52 +575,79 @@ function renderVendorShop(params) {
                 <button class="btn btn-secondary mt-4" onclick="router.navigate('vendors')">← ${t('backToVendors')}</button>
             </div>
         </div>
+
+        <div class="glass" style="padding: 20px; margin-bottom: 20px;">
+            <div class="search-wrap">
+                <input type="text" id="vsSearch" placeholder="${t('searchPlaceholder')}">
+                <select id="vsCatFilter" style="width: auto;">
+                    <option value="">${t('allCategories')}</option>
+                    ${[...new Set(store.getProducts().filter(p => p.vendorId === vendorId).map(p => p.category))].map(c =>
+        `<option value="${c}">${translations[currentLang][c.toLowerCase()] || c}</option>`
+    ).join('')}
+                </select>
+                <div style="display: flex; align-items: center; gap: 10px; margin-left: auto;">
+                    <label style="margin-bottom: 0;">${t('itemsPerPage')}:</label>
+                    <select id="vsItemsPer" style="width: auto;">
+                        <option value="8">8</option><option value="16" selected>16</option><option value="32">32</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
         <div id="vendorProductGrid" class="grid-products"></div>
+        
         <div class="flex-between" style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
             <div id="vsPagination" class="pagination" style="margin-top: 0;"></div>
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <label style="font-size: 0.9rem;">${t('itemsPerPage')}:</label>
-                <select id="vsItemsPerPage" style="width: auto; padding: 5px 10px;">
-                    <option value="8">8</option><option value="16">16</option><option value="32">32</option>
-                </select>
-            </div>
         </div>
     `;
 
     const grid = section.querySelector('#vendorProductGrid');
+    const searchInput = section.querySelector('#vsSearch');
+    const catFilter = section.querySelector('#vsCatFilter');
+    const itemsPerSelect = section.querySelector('#vsItemsPer');
     const paginationEl = section.querySelector('#vsPagination');
-    const itemsPerEl = section.querySelector('#vsItemsPerPage');
+
     let currentPage = 1;
 
     const renderProducts = () => {
-        const itemsPerPage = parseInt(itemsPerEl.value);
+        const query = searchInput.value.toLowerCase();
+        const category = catFilter.value;
+        const itemsPerPage = parseInt(itemsPerSelect.value);
+
         grid.innerHTML = '';
-        const prods = store.getProducts().filter(p => p.vendorId === vendorId);
+        let prods = store.getProducts().filter(p => p.vendorId === vendorId);
+
+        if (query) prods = prods.filter(p => p.name.toLowerCase().includes(query));
+        if (category) prods = prods.filter(p => p.category === category);
 
         const totalPages = Math.ceil(prods.length / itemsPerPage) || 1;
         if (currentPage > totalPages) currentPage = totalPages;
         const paginated = prods.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-        paginated.forEach(p => {
-            const card = document.createElement('div');
-            card.className = 'glass product-card';
-            const isReal = p.image && (p.image.startsWith('http') || p.image.startsWith('data:image'));
-            card.innerHTML = `
-                ${isReal ? `<img src="${p.image}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 15px; cursor: pointer;" onclick="showImageModal('${p.name}', '${p.image}')">` : `<div class="text-img-placeholder" onclick="showImageModal('${p.name}', '${p.image}')">[${p.name}]</div>`}
-                <h3>${p.name}</h3>
-                <p style="font-size: 0.85rem; color: var(--primary-color); font-weight: 500; margin-bottom: 5px;">
-                    ${translations[currentLang][p.category.toLowerCase()] || p.category}
-                </p>
-                <p style="color: #666; font-size: 0.9rem; line-height: 1.4; height: 3.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
-                    ${p.description}
-                </p>
-                <div class="flex-between" style="margin-top: auto; padding-top: 15px;">
-                    <span style="font-weight: bold; color: var(--primary-color); font-size: 1.1rem;">$${p.price}</span>
-                    ${!auth.isVendor() ? `<button class="btn btn-primary" onclick="addToCart('${p.id}')">${t('addToCart')}</button>` : ''}
-                </div>
-            `;
-            grid.appendChild(card);
-        });
+        if (paginated.length === 0) {
+            grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px;">No products found for this search.</div>`;
+        } else {
+            paginated.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'glass product-card';
+                const isReal = p.image && (p.image.startsWith('http') || p.image.startsWith('data:image'));
+                card.innerHTML = `
+                    ${isReal ? `<img src="${p.image}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 15px; cursor: pointer;" onclick="showImageModal('${p.name}', '${p.image}')">` : `<div class="text-img-placeholder" onclick="showImageModal('${p.name}', '${p.image}')">[${p.name}]</div>`}
+                    <h3>${p.name}</h3>
+                    <p style="font-size: 0.85rem; color: var(--primary-color); font-weight: 500; margin-bottom: 5px;">
+                        ${translations[currentLang][p.category.toLowerCase()] || p.category}
+                    </p>
+                    <p style="color: #666; font-size: 0.9rem; line-height: 1.4; height: 3.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
+                        ${p.description}
+                    </p>
+                    <div class="flex-between" style="margin-top: auto; padding-top: 15px;">
+                        <span style="font-weight: bold; color: var(--primary-color); font-size: 1.1rem;">$${p.price}</span>
+                        ${!auth.isVendor() ? `<button class="btn btn-primary" onclick="addToCart('${p.id}')">${t('addToCart')}</button>` : ''}
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
 
         paginationEl.innerHTML = `
             <button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} id="vsPrev">${t('prev')}</button>
@@ -632,7 +659,10 @@ function renderVendorShop(params) {
         paginationEl.querySelector('#vsNext').onclick = () => { if (currentPage < totalPages) { currentPage++; renderProducts(); window.scrollTo(0, 0); } };
     };
 
-    itemsPerEl.onchange = () => { currentPage = 1; renderProducts(); };
+    searchInput.oninput = () => { currentPage = 1; renderProducts(); };
+    catFilter.onchange = () => { currentPage = 1; renderProducts(); };
+    itemsPerSelect.onchange = () => { currentPage = 1; renderProducts(); };
+
     setTimeout(renderProducts, 50);
     return section;
 }
