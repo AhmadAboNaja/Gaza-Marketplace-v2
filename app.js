@@ -71,7 +71,11 @@ const translations = {
         browseVendors: "Browse Vendors",
         viewShop: "View Shop",
         backToVendors: "Back to Vendors",
-        allProductsBy: "All products by"
+        allProductsBy: "All products by",
+        vendorName: "Vendor Name",
+        productsCount: "Products",
+        actions: "Actions",
+        searchVendors: "Search vendors by name..."
     },
     ar: {
         welcome: "أهلاً بكم في سوق غزة",
@@ -140,7 +144,11 @@ const translations = {
         browseVendors: "تصفح البائعين",
         viewShop: "عرض المتجر",
         backToVendors: "العودة للقائمة",
-        allProductsBy: "جميع منتجات"
+        allProductsBy: "جميع منتجات",
+        vendorName: "اسم البائع",
+        productsCount: "المنتجات",
+        actions: "إجراءات",
+        searchVendors: "بحث عن بائع بالاسم..."
     }
 };
 
